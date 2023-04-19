@@ -1,22 +1,11 @@
 FROM rust:latest as builder
-
-WORKDIR /usr/src/app
+RUN apt-get update && apt-get -y install ca-certificates cmake musl-tools libssl-dev && rm -rf /var/lib/apt/lists/*
 COPY . .
-# Will build and cache the binary and dependent crates in release mode
-RUN --mount=type=cache,target=/usr/local/cargo,from=rust:latest,source=/usr/local/cargo \
-    --mount=type=cache,target=target \
-    cargo build --release && mv ./target/release/problem_01 ./problem_01
-
-# Runtime image
-FROM debian:bullseye-slim
-
-# Run as "app" user
-RUN useradd -ms /bin/bash app
-
-USER app
-WORKDIR /app
-
-# Get compiled binaries from builder's cargo install directory
-COPY --from=builder /usr/src/app/problem_01 /app/problem_01
-
-# No CMD or ENTRYPOINT, see fly.toml with `cmd` override.
+RUN rustup default stable && rustup update
+RUN rustup target add x86_64-unknown-linux-musl
+ENV PKG_CONFIG_ALLOW_CROSS=1
+RUN cargo build --target x86_64-unknown-linux-musl --release
+FROM scratch
+COPY --from=builder /target/x86_64-unknown-linux-musl/release/problem_01 .
+EXPOSE 8080
+CMD ["/problem_01"]
