@@ -43,23 +43,26 @@ async fn handle_request(mut socket: TcpStream) {
     let mut reader = BufReader::new(read);
 
     loop {
+        log::info!("Start a new loop!");
         let bytes = reader.read_until(b'\n', &mut buf).await;
 
         if let Ok(0) = bytes {
-            return;
-        }
-
-        if let Ok(1) = bytes {
+            log::info!("0 bytes sent");
             return;
         }
 
         let message: serde_json::Value = match serde_json::from_slice(&buf) {
             Ok(m) => m,
             Err(e) => {
+                log::error!(
+                    "Not a prober JSON message: {}",
+                    e
+                );
                 let _ = write.write(&MAL_FORMAT.as_bytes()).await;
                 let _ = write.write(&[b'\n']).await;
                 let _ = write.flush().await;
-                return;
+                buf.clear();
+                continue;
             }
         };
 
@@ -71,16 +74,27 @@ async fn handle_request(mut socket: TcpStream) {
                     Ok(n) => n,
                     Err(e) => {
                         log::error!("Not a valid number: {}", e);
-                        if let Err(e) = write
-                            .write(&serde_json::to_string(&Response {method: IS_PRIME.to_owned(), prime: false}).unwrap().as_bytes())
-                            .await
-                            {
-                                log::error!("Error writing serialize step: {}", e);
-                            }
-                        return;
+                        let message = serde_json::to_string(&Response {
+                            method: IS_PRIME.to_owned(),
+                            prime: false,
+                        })
+                        .unwrap();
+                        log::info!("Sending back response: {}", message);
+                        if let Err(e) = write.write(&message.as_bytes()).await {
+                            log::error!("Error writing serialize step: {}", e);
+                        }
+                        if let Err(e) = write.write(&[b'\n']).await {
+                            log::error!("Error writing: {}", e);
+                        }
+                        if let Err(e) = write.flush().await {
+                            log::error!("Error flushing: {}", e);
+                        }
+                        buf.clear();
+                        log::info!("After clearing buffer!");
+                        continue;
                     }
                 };
-
+                log::info!("Number is valid!");
                 let res = Response {
                     method: IS_PRIME.to_owned(),
                     prime: is_prime(possible_prime),
@@ -100,19 +114,21 @@ async fn handle_request(mut socket: TcpStream) {
                     if let Err(e) = write.flush().await {
                         log::error!("Error flushing: {}", e);
                     }
+                    buf.clear();
                 } else {
                     log::error!("Method is not isPrime");
                     if let Err(e) = write.write(&MAL_FORMAT.as_bytes()).await {
-                        log::error!("Write mal_format failed!");
+                        log::error!("Write mal_format failed: {}", e);
                     }
 
                     if let Err(e) = write.write(&[b'\n']).await {
-                        log::error!("Error writing escape character!");
+                        log::error!("Error writing escape character: {}", e);
                     }
                     if let Err(e) = write.flush().await {
-                        log::error!("Error flushing socket!");
+                        log::error!("Error flushing socket: {}", e);
                     }
                     log::info!("Wrote malformat response");
+                    buf.clear();
                 }
             }
             Err(e) => {
@@ -122,6 +138,7 @@ async fn handle_request(mut socket: TcpStream) {
                 let _ = write.write(&MAL_FORMAT.as_bytes()).await;
                 let _ = write.write(&[b'\n']).await;
                 let _ = write.flush().await;
+                buf.clear();
             }
         }
     }
