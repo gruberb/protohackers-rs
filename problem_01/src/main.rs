@@ -11,7 +11,7 @@ const MAL_FORMAT: &str = "}mal";
 #[derive(Debug, Deserialize, Serialize)]
 struct Request {
     method: String,
-    number: u64,
+    number: serde_json::value::Number,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -51,23 +51,36 @@ async fn handle_request(mut socket: TcpStream) {
         return;
     }
 
+    let message: serde_json::Value = serde_json::from_slice(&buf).unwrap();
+
+    log::info!("Message received: {}", message);
+
     match serde_json::from_slice::<Request>(&buf) {
         Ok(m) => {
-            log::error!("Message received: {:?}", m);
-            log::error!("Right method set? {}", m.method == IS_PRIME.to_owned());
-            log::error!("Is {} a prime? {}", m.number, is_prime(m.number));
+            let possible_prime = match m.number.to_string().parse::<u64>() {
+                Ok(n) => n,
+                Err(e) => {
+                    log::error!("Not a valid number: {}", e);
+
+                    let _ = write.write(&MAL_FORMAT.as_bytes()).await;
+                    let _ = write.write(&[b'\n']).await;
+                    let _ = write.flush().await;
+                    return;
+                }
+            };
 
             let res = Response {
                 method: IS_PRIME.to_owned(),
-                prime: is_prime(m.number),
+                prime: is_prime(possible_prime),
             };
 
             if m.method == IS_PRIME.to_owned() {
                 if let Err(e) = write
                     .write(&serde_json::to_string(&res).unwrap().as_bytes())
-                    .await {
-                        log::error!("Error writing serialize step: {}", e);
-                    }
+                    .await
+                {
+                    log::error!("Error writing serialize step: {}", e);
+                }
                 if let Err(e) = write.write(&[b'\n']).await {
                     log::error!("Error writing: {}", e);
                 }
@@ -83,7 +96,7 @@ async fn handle_request(mut socket: TcpStream) {
                 if let Err(e) = write.write(&[b'\n']).await {
                     log::error!("Error writing escape character!");
                 }
-                if let Err(e)= write.flush().await {
+                if let Err(e) = write.flush().await {
                     log::error!("Error flushing socket!");
                 }
                 log::info!("Wrote malformat response");
