@@ -1,0 +1,30 @@
+# fly.toml app configuration file generated for hidden-thunder-1268 on 2023-04-19T21:18:46+02:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = "hidden-thunder-1268"
+primary_region = "ams"
+
+kill_signal = "SIGINT"
+kill_timeout = 5
+processes = []
+
+[experimental]
+  auto_rollback = true
+
+[env]
+  ECHO_PORT = "8080"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8080
+
+  [[services.ports]]
+    port = 8080
+
+  [[services.tcp_checks]]
+    grace_period = "5s"
+    interval = "15s"
+    restart_limit = 2
+    timeout = "2s"
