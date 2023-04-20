@@ -23,7 +23,7 @@ struct Response {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-    let listener = TcpListener::bind("0.0.0.0:8080").await?;
+    let listener = TcpListener::bind("0.0.0.0:1222").await?;
     log::info!("Start TCP server");
 
     loop {
@@ -63,23 +63,38 @@ async fn handle_request(mut socket: TcpStream) {
             };
 
             if m.method == IS_PRIME.to_owned() {
-                let _ = write
-                    .write(&bincode::serialize(&serde_json::to_string(&res).unwrap()).unwrap())
-                    .await;
-                let _ = write.write(&[b'\"', b'\n']).await;
-                let _ = write.flush().await;
+                if let Err(e) = write
+                    .write(&serde_json::to_string(&res).unwrap().as_bytes())
+                    .await {
+                        log::error!("Error writing serialize step: {}", e);
+                    }
+                if let Err(e) = write.write(&[b'\n']).await {
+                    log::error!("Error writing: {}", e);
+                }
+                if let Err(e) = write.flush().await {
+                    log::error!("Error flushing: {}", e);
+                }
             } else {
-                let _ = write.write(&bincode::serialize(&MAL_FORMAT).unwrap()).await;
-                let _ = write.write(&[b'\"', b'\n']).await;
-                let _ = write.flush().await;
+                log::error!("Method is not isPrime");
+                if let Err(e) = write.write(&MAL_FORMAT.as_bytes()).await {
+                    log::error!("Write mal_format failed!");
+                }
+
+                if let Err(e) = write.write(&[b'\n']).await {
+                    log::error!("Error writing escape character!");
+                }
+                if let Err(e)= write.flush().await {
+                    log::error!("Error flushing socket!");
+                }
+                log::info!("Wrote malformat response");
             }
         }
         Err(e) => {
             log::error!("Error parsing the message: {}", e);
             log::error!("Message: {}", String::from_utf8_lossy(&buf));
 
-            let _ = write.write(&bincode::serialize(&MAL_FORMAT).unwrap()).await;
-            let _ = write.write(&[b'\"', b'\n']).await;
+            let _ = write.write(&MAL_FORMAT.as_bytes()).await;
+            let _ = write.write(&[b'\n']).await;
             let _ = write.flush().await;
         }
     }
