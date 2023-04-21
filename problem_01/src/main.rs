@@ -54,18 +54,18 @@ async fn handle_request(mut socket: TcpStream) {
 
         match validate_request(buf.clone()) {
             Ok(m) => {
+                log::info!("Valid request");
                 let _ = write.write(&m.as_bytes()).await;
-                let _ = write.write(&[b'\n']).await;
-                let _ = buf.clear();
-                buf.clear();
             }
             Err(_) => {
+                log::error!("Not valid request");
                 let _ = write.write(&MAL_FORMAT.as_bytes()).await;
-                let _ = write.write(&[b'\n']).await;
-                let _ = write.flush().await;
-                buf.clear();
             }
         }
+
+        let _ = write.write(&[b'\n']).await;
+        let _ = write.flush().await;
+        buf.clear();
     }
 }
 
@@ -75,6 +75,7 @@ fn validate_request(message: Vec<u8>) -> Result<String, std::io::Error> {
             let possible_prime = match m.number.to_string().parse::<u64>() {
                 Ok(n) => n,
                 Err(_) => {
+                    log::error!("Not a valid number for a prime candidate: {}", m.number);
                     return Ok(serde_json::to_string(&Response {
                         method: IS_PRIME.to_owned(),
                         prime: false,
@@ -84,12 +85,14 @@ fn validate_request(message: Vec<u8>) -> Result<String, std::io::Error> {
             };
 
             if m.method == IS_PRIME.to_owned() {
+                log::info!("Method isPrime and possible prime number");
                 return Ok(serde_json::to_string(&Response {
                     method: IS_PRIME.to_owned(),
                     prime: is_prime(possible_prime),
                 })
                 .unwrap());
             } else {
+                log::error!("Method is not isPrime");
                 return Err(std::io::Error::new(
                     ErrorKind::InvalidInput,
                     "Method is not isPrime",
@@ -97,6 +100,7 @@ fn validate_request(message: Vec<u8>) -> Result<String, std::io::Error> {
             }
         }
         Err(_) => {
+            log::error!("Message is not a valid JSON or Request type");
             return Err(std::io::Error::new(
                 ErrorKind::InvalidData,
                 "Message is not a Request",
