@@ -1,3 +1,5 @@
+use std::io::ErrorKind;
+
 use primes::is_prime;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncBufReadExt;
@@ -43,7 +45,6 @@ async fn handle_request(mut socket: TcpStream) {
     let mut reader = BufReader::new(read);
 
     loop {
-        log::info!("Start a new loop!");
         let bytes = reader.read_until(b'\n', &mut buf).await;
 
         if let Ok(0) = bytes {
@@ -51,95 +52,89 @@ async fn handle_request(mut socket: TcpStream) {
             return;
         }
 
-        let message: serde_json::Value = match serde_json::from_slice(&buf) {
-            Ok(m) => m,
-            Err(e) => {
-                log::error!(
-                    "Not a prober JSON message: {}",
-                    e
-                );
+        match validate_request(buf.clone()) {
+            Ok(m) => {
+                let _ = write.write(&m.as_bytes()).await;
+                let _ = write.write(&[b'\n']).await;
+                let _ = buf.clear();
+            }
+            Err(_) => {
                 let _ = write.write(&MAL_FORMAT.as_bytes()).await;
                 let _ = write.write(&[b'\n']).await;
                 let _ = write.flush().await;
                 buf.clear();
-                continue;
             }
-        };
+        }
 
-        log::info!("Message received: {}", message);
+        // Bad case
+        // log::error!("Not a prober JSON message: {}", e);
+        // let _ = write.write(&MAL_FORMAT.as_bytes()).await;
+        // let _ = write.write(&[b'\n']).await;
+        // let _ = write.flush().await;
+        // buf.clear();
 
-        match serde_json::from_slice::<Request>(&buf) {
-            Ok(m) => {
-                let possible_prime = match m.number.to_string().parse::<u64>() {
-                    Ok(n) => n,
-                    Err(e) => {
-                        log::error!("Not a valid number: {}", e);
-                        let message = serde_json::to_string(&Response {
-                            method: IS_PRIME.to_owned(),
-                            prime: false,
-                        })
-                        .unwrap();
-                        log::info!("Sending back response: {}", message);
-                        if let Err(e) = write.write(&message.as_bytes()).await {
-                            log::error!("Error writing serialize step: {}", e);
-                        }
-                        if let Err(e) = write.write(&[b'\n']).await {
-                            log::error!("Error writing: {}", e);
-                        }
-                        if let Err(e) = write.flush().await {
-                            log::error!("Error flushing: {}", e);
-                        }
-                        buf.clear();
-                        log::info!("After clearing buffer!");
-                        continue;
-                    }
-                };
-                log::info!("Number is valid!");
-                let res = Response {
+        // Good case
+        // log::info!("Sending back response: {}", message);
+        // if let Err(e) = write.write(&message.as_bytes()).await {
+        //     log::error!("Error writing serialize step: {}", e);
+        // }
+        // if let Err(e) = write.write(&[b'\n']).await {
+        //     log::error!("Error writing: {}", e);
+        // }
+        // if let Err(e) = write.flush().await {
+        //     log::error!("Error flushing: {}", e);
+        // }
+        // buf.clear();
+        // log::info!("After clearing buffer!");
+    }
+}
+
+fn validate_request(message: Vec<u8>) -> Result<String, std::io::Error> {
+    // Is it a proper formated JSON message?
+    // Do I need this case?
+    // let message: serde_json::Value = match serde_json::from_slice(&buf) {
+    //     Ok(m) => m,
+    //     Err(e) => {
+    //         log::error!("Not a prober JSON message: {}", e);
+    //         let _ = write.write(&MAL_FORMAT.as_bytes()).await;
+    //         let _ = write.write(&[b'\n']).await;
+    //         let _ = write.flush().await;
+    //         buf.clear();
+    //     }
+    // };
+
+    // Is it a proper Request?
+    match serde_json::from_slice::<Request>(&message) {
+        Ok(m) => {
+            let possible_prime = match m.number.to_string().parse::<u64>() {
+                Ok(n) => n,
+                Err(_) => {
+                    return Ok(serde_json::to_string(&Response {
+                        method: IS_PRIME.to_owned(),
+                        prime: false,
+                    })
+                    .unwrap());
+                }
+            };
+
+            if m.method == IS_PRIME.to_owned() {
+                return Ok(serde_json::to_string(&Response {
                     method: IS_PRIME.to_owned(),
                     prime: is_prime(possible_prime),
-                };
-
-                if m.method == IS_PRIME.to_owned() {
-                    log::info!("All good, send response: {:?}", res);
-                    if let Err(e) = write
-                        .write(&serde_json::to_string(&res).unwrap().as_bytes())
-                        .await
-                    {
-                        log::error!("Error writing serialize step: {}", e);
-                    }
-                    if let Err(e) = write.write(&[b'\n']).await {
-                        log::error!("Error writing: {}", e);
-                    }
-                    if let Err(e) = write.flush().await {
-                        log::error!("Error flushing: {}", e);
-                    }
-                    buf.clear();
-                } else {
-                    log::error!("Method is not isPrime");
-                    if let Err(e) = write.write(&MAL_FORMAT.as_bytes()).await {
-                        log::error!("Write mal_format failed: {}", e);
-                    }
-
-                    if let Err(e) = write.write(&[b'\n']).await {
-                        log::error!("Error writing escape character: {}", e);
-                    }
-                    if let Err(e) = write.flush().await {
-                        log::error!("Error flushing socket: {}", e);
-                    }
-                    log::info!("Wrote malformat response");
-                    buf.clear();
-                }
+                })
+                .unwrap());
+            } else {
+                return Err(std::io::Error::new(
+                    ErrorKind::InvalidInput,
+                    "Method is not isPrime",
+                ));
             }
-            Err(e) => {
-                log::error!("Error parsing the message: {}", e);
-                log::error!("Message: {}", String::from_utf8_lossy(&buf));
-
-                let _ = write.write(&MAL_FORMAT.as_bytes()).await;
-                let _ = write.write(&[b'\n']).await;
-                let _ = write.flush().await;
-                buf.clear();
-            }
+        }
+        Err(_) => {
+            return Err(std::io::Error::new(
+                ErrorKind::InvalidData,
+                "Message is not a Request",
+            ));
         }
     }
 }
