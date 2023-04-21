@@ -57,6 +57,7 @@ async fn handle_request(mut socket: TcpStream) {
                 let _ = write.write(&m.as_bytes()).await;
                 let _ = write.write(&[b'\n']).await;
                 let _ = buf.clear();
+                buf.clear();
             }
             Err(_) => {
                 let _ = write.write(&MAL_FORMAT.as_bytes()).await;
@@ -65,45 +66,10 @@ async fn handle_request(mut socket: TcpStream) {
                 buf.clear();
             }
         }
-
-        // Bad case
-        // log::error!("Not a prober JSON message: {}", e);
-        // let _ = write.write(&MAL_FORMAT.as_bytes()).await;
-        // let _ = write.write(&[b'\n']).await;
-        // let _ = write.flush().await;
-        // buf.clear();
-
-        // Good case
-        // log::info!("Sending back response: {}", message);
-        // if let Err(e) = write.write(&message.as_bytes()).await {
-        //     log::error!("Error writing serialize step: {}", e);
-        // }
-        // if let Err(e) = write.write(&[b'\n']).await {
-        //     log::error!("Error writing: {}", e);
-        // }
-        // if let Err(e) = write.flush().await {
-        //     log::error!("Error flushing: {}", e);
-        // }
-        // buf.clear();
-        // log::info!("After clearing buffer!");
     }
 }
 
 fn validate_request(message: Vec<u8>) -> Result<String, std::io::Error> {
-    // Is it a proper formated JSON message?
-    // Do I need this case?
-    // let message: serde_json::Value = match serde_json::from_slice(&buf) {
-    //     Ok(m) => m,
-    //     Err(e) => {
-    //         log::error!("Not a prober JSON message: {}", e);
-    //         let _ = write.write(&MAL_FORMAT.as_bytes()).await;
-    //         let _ = write.write(&[b'\n']).await;
-    //         let _ = write.flush().await;
-    //         buf.clear();
-    //     }
-    // };
-
-    // Is it a proper Request?
     match serde_json::from_slice::<Request>(&message) {
         Ok(m) => {
             let possible_prime = match m.number.to_string().parse::<u64>() {
