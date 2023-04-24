@@ -155,6 +155,8 @@ impl Handler {
                         let mean = if count > 0 { sum / count } else { 0 };
                         debug!(?mean);
                         self.connection.write_frame(&Frame::Response(mean)).await?;
+                    } else {
+                        self.connection.write_frame(&Frame::Response(0)).await?;
                     }
                 }
                 _ => unimplemented!(),
