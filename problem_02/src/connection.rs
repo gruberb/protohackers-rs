@@ -65,7 +65,7 @@ impl Connection {
         debug!(?frame);
         if let Frame::Response(mean) = frame {
             let _ = self.stream.write(&[mean.to_ne_bytes()[0]]).await?;
-            return Ok(());
+            self.stream.flush().await?
         }
 
         Err("Wrong frame".into())
