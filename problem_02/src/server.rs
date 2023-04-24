@@ -1,5 +1,6 @@
-use crate::{Connection, Shutdown};
+use crate::{frame::Frame, Connection, Shutdown};
 
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
@@ -18,8 +19,12 @@ struct Listener {
 struct Handler {
     connection: Connection,
     shutdown: Shutdown,
+    local_db: BTreeMap<Timestamp, Price>,
     _shutdown_complete: mpsc::Sender<()>,
 }
+
+type Timestamp = i32;
+type Price = i32;
 
 const MAX_CONNECTIONS: usize = 5;
 
@@ -78,8 +83,11 @@ impl Listener {
             let mut handler = Handler {
                 connection: Connection::new(socket),
                 shutdown: Shutdown::new(self.notify_shutdown.subscribe()),
+                local_db: BTreeMap::new(),
                 _shutdown_complete: self.shutdown_complete_tx.clone(),
             };
+
+            info!("Created new handler");
 
             tokio::spawn(async move {
                 if let Err(err) = handler.run().await {
@@ -116,6 +124,7 @@ impl Handler {
             let maybe_frame = tokio::select! {
                 res = self.connection.read_frame() => res?,
                 _ = self.shutdown.recv() => {
+                    debug!("Shutdown");
                     return Ok(());
                 }
             };
@@ -127,7 +136,29 @@ impl Handler {
                 None => return Ok(()),
             };
 
-            debug!(?frame);
+            match frame {
+                Frame::Insert { timestamp, price } => {
+                    self.local_db.insert(timestamp, price);
+                }
+                Frame::Query { mintime, maxtime } => {
+                    debug!(?mintime, ?maxtime);
+
+                    if mintime <= maxtime {
+                        let mut count = 0;
+                        let mut sum = 0i64;
+
+                        for (_, price) in self.local_db.range(mintime..=maxtime) {
+                            sum += *price as i64;
+                            count += 1;
+                        }
+
+                        let mean = if count > 0 { sum / count } else { 0 };
+                        debug!(?mean);
+                        self.connection.write_frame(&Frame::Response(mean)).await?;
+                    }
+                }
+                _ => unimplemented!(),
+            }
         }
 
         Ok(())

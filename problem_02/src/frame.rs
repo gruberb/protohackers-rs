@@ -9,6 +9,7 @@ use tracing::{debug, error, info};
 pub enum Frame {
     Insert { timestamp: i32, price: i32 },
     Query { mintime: i32, maxtime: i32 },
+    Response(i64),
 }
 
 #[derive(Debug)]
@@ -22,10 +23,12 @@ impl Frame {
         info!("Check frame");
         match get_u8(src)? {
             b'I' => {
+                debug!("INSERT message");
                 get_line(src)?;
                 Ok(())
             }
             b'Q' => {
+                debug!("QUERY message");
                 get_line(src)?;
                 Ok(())
             }
@@ -78,8 +81,9 @@ fn get_u8(src: &mut Cursor<&[u8]>) -> Result<u8, Error> {
 }
 
 fn get_line<'a>(src: &mut Cursor<&'a [u8]>) -> Result<&'a [u8], Error> {
-    if src.get_ref().len() == 9 {
+    if src.get_ref().len() >= 9 {
         src.set_position(9);
+        info!("Set cursors position to 9");
         return Ok(&src.get_ref()[..]);
     }
 

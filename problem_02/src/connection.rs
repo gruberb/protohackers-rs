@@ -2,7 +2,7 @@ use crate::frame::{self, Frame};
 
 use bytes::{Buf, BytesMut};
 use std::io::Cursor;
-use tokio::io::{AsyncReadExt, BufWriter};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::TcpStream;
 use tracing::{debug, info};
 
@@ -48,7 +48,7 @@ impl Connection {
             Ok(_) => {
                 info!("Frame::check succesful");
                 let len = buf.position() as usize;
-
+                debug!(?len);
                 buf.set_position(0);
 
                 let frame = Frame::parse(&mut buf)?;
@@ -59,5 +59,15 @@ impl Connection {
             Err(Incomplete) => Ok(None),
             Err(e) => Err(e.into()),
         }
+    }
+
+    pub async fn write_frame(&mut self, frame: &Frame) -> crate::Result<()> {
+        debug!(?frame);
+        if let Frame::Response(mean) = frame {
+            let _ = self.stream.write(&[mean.to_ne_bytes()[0]]);
+            return Ok(());
+        }
+
+        Err("Wrong frame".into())
     }
 }
