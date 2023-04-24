@@ -64,7 +64,7 @@ impl Connection {
     pub async fn write_frame(&mut self, frame: &Frame) -> crate::Result<()> {
         debug!(?frame);
         if let Frame::Response(mean) = frame {
-            let _ = self.stream.write(&[mean.to_ne_bytes()[0]]);
+            let _ = self.stream.write(&[mean.to_ne_bytes()[0]]).await?;
             return Ok(());
         }
 
