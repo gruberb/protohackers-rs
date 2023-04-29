@@ -21,7 +21,7 @@ type Message = String;
 type Id = i32;
 
 #[derive(Clone, Debug, Default)]
-struct BroadcastMessage(Username, Message);
+struct BroadcastMessage(Id, Message);
 
 #[derive(Clone, Debug, Default)]
 struct Users(Arc<Mutex<HashMap<Id, Username>>>);
@@ -63,11 +63,11 @@ async fn main() -> Result<()> {
                         name = username.clone();
                         db.0.lock().unwrap().insert(id, username.clone());
                         let message = compose_message(id, db.clone());
-                        info!("Adding username: {username} to db");
+                        info!("Adding username/id: {username}/{id} to db");
                         let _ = framed.send(message).await;
-                        info!("Send message to client");
+                        info!("Send room message to {username}");
                         let b = BroadcastMessage(
-                            username.clone(),
+                            id,
                             format!("* {} has entered the room", username),
                         );
                         let _ = tx.send(b);
@@ -92,7 +92,7 @@ async fn main() -> Result<()> {
                                 // broadcast message to all clients except the one who sent it
                                 info!("Receiving new chat message: {n}");
                                 let b =
-                                    BroadcastMessage(name.clone(), format!("[{}]: {}", name, n));
+                                    BroadcastMessage(id, format!("[{}]: {}", name, n));
                                 let _ = tx.send(b);
                             }
                             Some(Err(e)) => {
@@ -104,7 +104,7 @@ async fn main() -> Result<()> {
                                 // send leave message
                                 info!("No next frame");
                                 let b =
-                                    BroadcastMessage(name.clone(), format!("* {} has left the room", name));
+                                    BroadcastMessage(id, format!("* {} has left the room", name));
                                 db.0.lock().unwrap().remove(&id);
                                 let _ = tx.send(b);
                                 break;
@@ -114,7 +114,7 @@ async fn main() -> Result<()> {
                     message = rx.recv() => {
                         let broadcast = message.clone().unwrap();
                         info!("Broadcast received: {:?}", message.clone().unwrap());
-                        if broadcast.0 != name {
+                        if broadcast.0 != id {
                             info!("Broadcast sent to {}: {:?}", name, message.clone().unwrap());
                             let _ = framed.send(message.unwrap().1).await;
                         }
