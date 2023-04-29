@@ -57,17 +57,22 @@ async fn main() -> Result<()> {
             // we won't process until we find one.
             match framed.next().await {
                 Some(Ok(username)) => {
-                    name = username.clone();
-                    db.0.lock().unwrap().insert(username.clone(), address);
-                    let message = compose_message(username.clone(), db.clone());
-                    info!("Adding username: {username} to db");
-                    let _ = framed.send(message).await;
-                    info!("Send message to client");
-                    let b = BroadcastMessage(
-                        username.clone(),
-                        format!("* {} has entered the room", username),
-                    );
-                    let _ = tx.send(b);
+                    if !username.is_empty() && username.is_ascii() {
+                        name = username.clone();
+                        db.0.lock().unwrap().insert(username.clone(), address);
+                        let message = compose_message(username.clone(), db.clone());
+                        info!("Adding username: {username} to db");
+                        let _ = framed.send(message).await;
+                        info!("Send message to client");
+                        let b = BroadcastMessage(
+                            username.clone(),
+                            format!("* {} has entered the room", username),
+                        );
+                        let _ = tx.send(b);
+                    } else {
+                        return;
+                    }
+
                 }
                 Some(Err(e)) => {
                     error!("Error parsing message: {e}");
