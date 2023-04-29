@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
     // Infinite loop to always listen to new connections on this IP/PORT
     loop {
         let (stream, address) = listener.accept().await?;
-        let (tx, mut rx) = (tx.clone(), tx.subscribe());
+        let (tx, rx) = (tx.clone(), tx.subscribe());
         let db = db.clone();
 
         tokio::spawn(async move {
@@ -63,12 +63,6 @@ async fn main() -> Result<()> {
                         let message = compose_message(username.clone(), db.clone());
                         info!("Adding username: {username} to db");
                         let _ = framed.send(message).await;
-                        info!("Send message to client");
-                        let b = BroadcastMessage(
-                            username.clone(),
-                            format!("* {} has entered the room", username),
-                        );
-                        let _ = tx.send(b);
                     } else {
                         return;
                     }
@@ -82,6 +76,13 @@ async fn main() -> Result<()> {
                     return;
                 }
             }
+
+            let b = BroadcastMessage(
+                name.clone(),
+                format!("* {} has entered the room", name),
+            );
+            let _ = tx.send(b);
+            let mut rx = rx.resubscribe();
 
             loop {
                 tokio::select! {
