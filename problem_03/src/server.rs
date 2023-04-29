@@ -18,13 +18,13 @@ type Result<T> = std::result::Result<T, Error>;
 
 type Username = String;
 type Message = String;
-type Address = SocketAddr;
+type Id = i32;
 
 #[derive(Clone, Debug, Default)]
 struct BroadcastMessage(Username, Message);
 
 #[derive(Clone, Debug, Default)]
-struct Users(Arc<Mutex<HashMap<Username, Address>>>);
+struct Users(Arc<Mutex<HashMap<Id, Username>>>);
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -36,6 +36,7 @@ async fn main() -> Result<()> {
     let (tx, _) = broadcast::channel(256);
 
     let db = Users::default();
+    let mut id = 0;
 
     // Infinite loop to always listen to new connections on this IP/PORT
     loop {
@@ -51,6 +52,7 @@ async fn main() -> Result<()> {
                 .await;
 
             let mut name = String::default();
+            id += 1;
 
             // We read exactly one line per loop. A line ends with \n.
             // So if the client doesn't frame their package with \n at the end,
@@ -59,8 +61,8 @@ async fn main() -> Result<()> {
                 Some(Ok(username)) => {
                     if !username.is_empty() && username.is_ascii() {
                         name = username.clone();
-                        db.0.lock().unwrap().insert(username.clone(), address);
-                        let message = compose_message(username.clone(), db.clone());
+                        db.0.lock().unwrap().insert(id, username.clone());
+                        let message = compose_message(id, db.clone());
                         info!("Adding username: {username} to db");
                         let _ = framed.send(message).await;
                         info!("Send message to client");
@@ -103,7 +105,7 @@ async fn main() -> Result<()> {
                                 info!("No next frame");
                                 let b =
                                     BroadcastMessage(name.clone(), format!("* {} has left the room", name));
-                                db.0.lock().unwrap().remove(&name.clone());
+                                db.0.lock().unwrap().remove(&id);
                                 let _ = tx.send(b);
                                 break;
                             }
@@ -124,14 +126,14 @@ async fn main() -> Result<()> {
     }
 }
 
-fn compose_message(name: String, db: Users) -> String {
+fn compose_message(id: i32, db: Users) -> String {
     format!(
         "* The room contains: {}",
         db.0.lock()
             .unwrap()
-            .keys()
-            .filter(|n| n.as_str() != name)
-            .map(|n| n.to_string())
+            .iter()
+            .filter(|(i, _)| **i != id)
+            .map(|(_, n)| n.to_string())
             .collect::<Vec<_>>()
             .join(", ")
     )
