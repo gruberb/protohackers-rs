@@ -18,13 +18,13 @@ type Result<T> = std::result::Result<T, Error>;
 
 type Username = String;
 type Message = String;
-type Id = i32;
+type Address = SocketAddr;
 
 #[derive(Clone, Debug, Default)]
-struct BroadcastMessage(Id, Message);
+struct BroadcastMessage(Username, Message);
 
 #[derive(Clone, Debug, Default)]
-struct Users(Arc<Mutex<HashMap<Id, Username>>>);
+struct Users(Arc<Mutex<HashMap<Username, Address>>>);
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -36,7 +36,6 @@ async fn main() -> Result<()> {
     let (tx, _) = broadcast::channel(256);
 
     let db = Users::default();
-    let mut id = 0;
 
     // Infinite loop to always listen to new connections on this IP/PORT
     loop {
@@ -52,7 +51,6 @@ async fn main() -> Result<()> {
                 .await;
 
             let mut name = String::default();
-            id += 1;
 
             // We read exactly one line per loop. A line ends with \n.
             // So if the client doesn't frame their package with \n at the end,
@@ -61,13 +59,13 @@ async fn main() -> Result<()> {
                 Some(Ok(username)) => {
                     if !username.is_empty() && username.is_ascii() {
                         name = username.clone();
-                        db.0.lock().unwrap().insert(id, username.clone());
-                        let message = compose_message(id, db.clone());
-                        info!("Adding username/id: {username}/{id} to db");
+                        db.0.lock().unwrap().insert(username.clone(), address);
+                        let message = compose_message(username.clone(), db.clone());
+                        info!("Adding username: {username} to db");
                         let _ = framed.send(message).await;
-                        info!("Send room message to {username}");
+                        info!("Send message to client");
                         let b = BroadcastMessage(
-                            id,
+                            username.clone(),
                             format!("* {} has entered the room", username),
                         );
                         let _ = tx.send(b);
@@ -92,7 +90,7 @@ async fn main() -> Result<()> {
                                 // broadcast message to all clients except the one who sent it
                                 info!("Receiving new chat message: {n}");
                                 let b =
-                                    BroadcastMessage(id, format!("[{}]: {}", name, n));
+                                    BroadcastMessage(name.clone(), format!("[{}]: {}", name, n));
                                 let _ = tx.send(b);
                             }
                             Some(Err(e)) => {
@@ -104,8 +102,8 @@ async fn main() -> Result<()> {
                                 // send leave message
                                 info!("No next frame");
                                 let b =
-                                    BroadcastMessage(id, format!("* {} has left the room", name));
-                                db.0.lock().unwrap().remove(&id);
+                                    BroadcastMessage(name.clone(), format!("* {} has left the room", name));
+                                db.0.lock().unwrap().remove(&name.clone());
                                 let _ = tx.send(b);
                                 break;
                             }
@@ -114,7 +112,7 @@ async fn main() -> Result<()> {
                     message = rx.recv() => {
                         let broadcast = message.clone().unwrap();
                         info!("Broadcast received: {:?}", message.clone().unwrap());
-                        if broadcast.0 != id {
+                        if broadcast.0 != name {
                             info!("Broadcast sent to {}: {:?}", name, message.clone().unwrap());
                             let _ = framed.send(message.unwrap().1).await;
                         }
@@ -126,14 +124,14 @@ async fn main() -> Result<()> {
     }
 }
 
-fn compose_message(id: i32, db: Users) -> String {
+fn compose_message(name: String, db: Users) -> String {
     format!(
         "* The room contains: {}",
         db.0.lock()
             .unwrap()
-            .iter()
-            .filter(|(i, _)| **i != id)
-            .map(|(_, n)| n.to_string())
+            .keys()
+            .filter(|n| n.as_str() != name)
+            .map(|n| n.to_string())
             .collect::<Vec<_>>()
             .join(", ")
     )
