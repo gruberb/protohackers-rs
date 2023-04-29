@@ -98,7 +98,7 @@ async fn main() -> Result<()> {
                                 info!("No next frame");
                                 let b =
                                     BroadcastMessage(name.clone(), format!("* {} has left the room", name));
-                                db.0.lock().unwrap().remove(username.clone());
+                                db.0.lock().unwrap().remove(&name.clone());
                                 let _ = tx.send(b);
                                 break;
                             }
