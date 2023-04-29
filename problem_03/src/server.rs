@@ -57,7 +57,7 @@ async fn main() -> Result<()> {
             // we won't process until we find one.
             match framed.next().await {
                 Some(Ok(username)) => {
-                    if !username.is_empty() && username.is_ascii() {
+                    if !username.is_empty()  && name.chars().all(char::is_alphanumeric) {
                         name = username.clone();
                         db.0.lock().unwrap().insert(username.clone(), address);
                         let message = compose_message(username.clone(), db.clone());
