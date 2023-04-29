@@ -72,13 +72,14 @@ async fn main() -> Result<()> {
                     } else {
                         return;
                     }
-
                 }
                 Some(Err(e)) => {
                     error!("Error parsing message: {e}");
+                    return;
                 }
                 None => {
                     info!("No frame");
+                    return;
                 }
             }
 
@@ -90,7 +91,7 @@ async fn main() -> Result<()> {
                                 // broadcast message to all clients except the one who sent it
                                 info!("Receiving new chat message: {n}");
                                 let b =
-                                    BroadcastMessage(name.clone(), format!("[{}]: {}", name, n));
+                                    BroadcastMessage(name.clone(), format!("[{}] {}", name, n));
                                 let _ = tx.send(b);
                             }
                             Some(Err(e)) => {
