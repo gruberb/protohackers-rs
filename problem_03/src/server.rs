@@ -37,6 +37,8 @@ async fn main() -> Result<()> {
 
     let db = Users::default();
 
+    let mut valid_name = true;
+
     // Infinite loop to always listen to new connections on this IP/PORT
     loop {
         let (stream, address) = listener.accept().await?;
@@ -57,13 +59,14 @@ async fn main() -> Result<()> {
             // we won't process until we find one.
             match framed.next().await {
                 Some(Ok(username)) => {
-                    if !username.is_empty()  && name.chars().all(char::is_alphanumeric) {
+                    if !username.is_empty()  && username.chars().all(char::is_alphanumeric) {
                         name = username.clone();
                         db.0.lock().unwrap().insert(username.clone(), address);
                         let message = compose_message(username.clone(), db.clone());
                         info!("Adding username: {username} to db");
                         let _ = framed.send(message).await;
                     } else {
+                        valid_name = false;
                         return;
                     }
                 }
@@ -75,6 +78,10 @@ async fn main() -> Result<()> {
                     info!("No frame");
                     return;
                 }
+            }
+
+            if !valid_name {
+                return;
             }
 
             let b = BroadcastMessage(
@@ -123,7 +130,13 @@ async fn main() -> Result<()> {
                 }
             }
         });
+
+        if !valid_name {
+            break;
+        }
     }
+
+    Ok(())
 }
 
 fn compose_message(name: String, db: Users) -> String {
