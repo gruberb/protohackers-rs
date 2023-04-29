@@ -107,6 +107,7 @@ async fn main() -> Result<()> {
                         let broadcast = message.clone().unwrap();
                         info!("Broadcast received: {:?}", message.clone().unwrap());
                         if broadcast.0 != name {
+                            info!("Broadcast sent to {}: {:?}", name, message.clone().unwrap());
                             let _ = framed.send(message.unwrap().1).await;
                         }
 
