@@ -17,7 +17,11 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 type Result<T> = std::result::Result<T, Error>;
 
 type Username = String;
+type Message = String;
 type Address = SocketAddr;
+
+#[derive(Clone, Debug, Default)]
+struct BroadcastMessage(Username, Message);
 
 #[derive(Clone, Debug, Default)]
 struct Users(Arc<Mutex<HashMap<Username, Address>>>);
@@ -59,7 +63,11 @@ async fn main() -> Result<()> {
                     info!("Adding username: {username} to db");
                     let _ = framed.send(message).await;
                     info!("Send message to client");
-                    let _ = tx.send(format!("* {} has entered the room", username));
+                    let b = BroadcastMessage(
+                        username.clone(),
+                        format!("* {} has entered the room", username),
+                    );
+                    let _ = tx.send(b);
                 }
                 Some(Err(e)) => {
                     error!("Error parsing message: {e}");
@@ -76,7 +84,9 @@ async fn main() -> Result<()> {
                             Some(Ok(n)) => {
                                 // broadcast message to all clients except the one who sent it
                                 info!("Receiving new chat message: {n}");
-                                let _ = tx.send(format!("[{}]: {}", name, n));
+                                let b =
+                                    BroadcastMessage(name.clone(), format!("[{}]: {}", name, n));
+                                let _ = tx.send(b);
                             }
                             Some(Err(e)) => {
                                 error!("Error receiving chat message: {e}");
@@ -86,14 +96,20 @@ async fn main() -> Result<()> {
                                 // remove client from db etc.
                                 // send leave message
                                 info!("No next frame");
-                                let _ = tx.send(format!("* {} has left the room", name));
+                                let b =
+                                    BroadcastMessage(name.clone(), format!("* {} has left the room", name));
+                                let _ = tx.send(b);
                                 break;
                             }
                         }
                     }
                     message = rx.recv() => {
+                        let broadcast = message.clone().unwrap();
                         info!("Broadcast received: {:?}", message.clone().unwrap());
-                        let _ = framed.send(message.unwrap()).await;
+                        if broadcast.0 != name {
+                            let _ = framed.send(message.unwrap().1).await;
+                        }
+
                     }
                 }
             }
