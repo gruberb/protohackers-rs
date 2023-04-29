@@ -22,7 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if n > 0 {
                     info!("Receivng from server: {}", buf.trim_end());
                 } else {
-                    info!("Server is finished sending, break");
+                    info!("Server is finished sending: {}", n);
                     return;
                 }
             } else {

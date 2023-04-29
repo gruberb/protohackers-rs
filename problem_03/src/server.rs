@@ -1,5 +1,12 @@
-use futures::{SinkExt, StreamExt};
+use futures::{stream::StreamExt, SinkExt};
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
+use tokio::sync::{
+    broadcast,
+    broadcast::{Receiver, Sender},
+};
 use tokio_util::codec::{Framed, LinesCodec};
 use tracing::{error, info};
 
@@ -9,41 +16,100 @@ const PORT: u16 = 1222;
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Result<T> = std::result::Result<T, Error>;
 
+type Username = String;
+type Address = SocketAddr;
+
+#[derive(Clone, Debug, Default)]
+struct Users(Arc<Mutex<HashMap<Username, Address>>>);
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::try_init().expect("Tracing was not setup");
 
     let listener = TcpListener::bind(format!("{IP}:{PORT}")).await?;
     info!("Listening on: {}", format!("{IP}:{PORT}"));
+
+    let (tx, _) = broadcast::channel(256);
+
+    let db = Users::default();
+
     // Infinite loop to always listen to new connections on this IP/PORT
     loop {
-        // Get the TCP stream out of the new connection, and the address from which
-        // it is connected to
-
         let (stream, address) = listener.accept().await?;
-        let mut framed = Framed::new(stream, LinesCodec::new());
-        info!("New address connected: {}", address);
-        let _ = framed.send("You are connected!".to_string()).await;
+        let (tx, mut rx) = (tx.clone(), tx.subscribe());
+        let db = db.clone();
 
-        // We spawn a new task, so every incoming connection can be put on a thread
-        // and be worked on "in the background"
-        // This allows us to handle multiple connections "at the same time"
         tokio::spawn(async move {
+            let mut framed = Framed::new(stream, LinesCodec::new());
+            info!("New address connected: {address}");
+            let _ = framed
+                .send("Welcome to budgetchat! What shall I call you?".to_string())
+                .await;
+
+            let mut name = String::default();
+
+            // We read exactly one line per loop. A line ends with \n.
+            // So if the client doesn't frame their package with \n at the end,
+            // we won't process until we find one.
+            match framed.next().await {
+                Some(Ok(username)) => {
+                    name = username.clone();
+                    db.0.lock().unwrap().insert(username.clone(), address);
+                    let message = compose_message(username.clone(), db.clone());
+                    info!("Adding username: {username} to db");
+                    let _ = framed.send(message).await;
+                    info!("Send message to client");
+                    let _ = tx.send(format!("* {} has entered the room", username));
+                }
+                Some(Err(e)) => {
+                    error!("Error parsing message: {e}");
+                }
+                None => {
+                    info!("No frame");
+                }
+            }
+
             loop {
-                // We read exactly one line per loop. A line ends with \n.
-                // So if the client doesn't frame their package with \n at the end,
-                // we won't process until we find one.
-                match framed.next().await {
-                    Some(n) => {
-                        if let Err(e) = n {
-                            error!("Error parsing message: {}", e);
-                        } else {
-                            let _ = framed.send(n.unwrap()).await;
+                tokio::select! {
+                    n = framed.next() => {
+                        match n {
+                            Some(Ok(n)) => {
+                                // broadcast message to all clients except the one who sent it
+                                info!("Receiving new chat message: {n}");
+                                let _ = tx.send(format!("[{}]: {}", name, n));
+                            }
+                            Some(Err(e)) => {
+                                error!("Error receiving chat message: {e}");
+                            }
+                            None => {
+                                // Connection dropped
+                                // remove client from db etc.
+                                // send leave message
+                                info!("No next frame");
+                                let _ = tx.send(format!("* {} has left the room", name));
+                                break;
+                            }
                         }
                     }
-                    None => return,
-                };
+                    message = rx.recv() => {
+                        info!("Broadcast received: {:?}", message.clone().unwrap());
+                        let _ = framed.send(message.unwrap()).await;
+                    }
+                }
             }
         });
     }
+}
+
+fn compose_message(name: String, db: Users) -> String {
+    format!(
+        "* The room contains: {}",
+        db.0.lock()
+            .unwrap()
+            .keys()
+            .filter(|n| n.as_str() != name)
+            .map(|n| n.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
 }
