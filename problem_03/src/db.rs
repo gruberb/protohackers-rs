@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::Result;
 
