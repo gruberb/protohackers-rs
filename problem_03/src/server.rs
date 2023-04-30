@@ -128,8 +128,10 @@ impl Handler {
         let welcome = String::from("Welcome to budgetchat! What shall I call you?");
         let username;
 
+        // Send the Welcome message to the connected client
         let _ = self.connection.write_frame(welcome).await;
 
+        // Read the answer (username) from the client
         if let Some(Ok(name)) = self.connection.stream.next().await {
             info!("Add {name} to db");
             self.db.insert_user(name.clone()).await?;
@@ -138,15 +140,19 @@ impl Handler {
             return Ok(());
         }
 
+        // Broadcast the message "* USER has entered the room"
         let joined_message = format!("* {username} has entered the room");
         let _ = self.connection
             .broadcast_message(BroadcastMessage::new(username.clone(), joined_message));
+
+        // Write back directly to the client which users are currently in the room
         let room_contains_message = format!(
             "* The room contains {}",
             self.db.get_room_members(username.clone()).await.join(",")
         );
         let _ = self.connection.write_frame(room_contains_message).await;
 
+        // Connect the client to the broadcast channel
         let mut receiver = self.connection.broadcast.subscribe();
 
         while !self.shutdown.is_shutdown() {
@@ -154,7 +160,7 @@ impl Handler {
                 res = self.connection.stream.next() => match res {
                     Some(Ok(frame)) => {
                         let _ = self.connection
-                            .broadcast_message(BroadcastMessage::new(username.clone(), frame));
+                            .broadcast_message(BroadcastMessage::new(username.clone(), format!("[{username}] {frame}")));
                     },
                     Some(Err(_)) => {
                         error!("Could not parse frame");
@@ -170,7 +176,7 @@ impl Handler {
                 message = receiver.recv() => {
                     info!("Message received: {:?}", message.as_ref().unwrap());
                     if message.as_ref().unwrap().from != username {
-                        let _ = self.connection.write_frame(format!("[{}] {}", username, message.as_ref().unwrap().message.clone())).await;
+                        let _ = self.connection.write_frame(message.as_ref().unwrap().message.clone()).await;
                     }
                 }
                 _ = self.shutdown.recv() => {

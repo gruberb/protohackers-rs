@@ -18,7 +18,7 @@ impl Db {
     }
 
     pub async fn insert_user(&self, username: String) -> Result<()> {
-        if !username.is_empty() && username.chars().all(char::is_alphabetic) {
+        if !username.is_empty() && username.chars().all(char::is_alphanumeric) {
             self.users.write().await.push(username);
             Ok(())
         } else {
