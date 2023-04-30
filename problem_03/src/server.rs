@@ -80,9 +80,7 @@ impl Listener {
                 .unwrap();
 
             let socket = self.accept().await?;
-            let message_sender:
-                broadcast::Sender<BroadcastMessage>
-             =
+            let message_sender: broadcast::Sender<BroadcastMessage> =
                 self.broadcast_message.clone();
 
             let mut handler = Handler {
@@ -142,7 +140,8 @@ impl Handler {
 
         // Broadcast the message "* USER has entered the room"
         let joined_message = format!("* {username} has entered the room");
-        let _ = self.connection
+        let _ = self
+            .connection
             .broadcast_message(BroadcastMessage::new(username.clone(), joined_message));
 
         // Write back directly to the client which users are currently in the room

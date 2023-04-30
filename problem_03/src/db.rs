@@ -36,7 +36,6 @@ impl Db {
             .filter(|n| {
                 info!("{n} is in the room");
                 *n != username
-
             })
             .collect()
     }
