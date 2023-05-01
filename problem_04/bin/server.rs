@@ -17,7 +17,6 @@ async fn main() -> io::Result<()> {
     let storage = Arc::new(Mutex::new(HashMap::<String, String>::new()));
 
     tokio::spawn(async move {
-        info!("Send back!");
         while let Some((bytes, addr)) = rx.recv().await {
             let _ = s.send_to(&bytes, &addr).await.unwrap();
         }
@@ -25,10 +24,9 @@ async fn main() -> io::Result<()> {
 
     let mut buf = [0; 1024];
     loop {
-        info!("Recv loop");
         let (len, addr) = r.recv_from(&mut buf).await?;
-        let message = str::from_utf8(&buf[..len]).unwrap().trim_matches('\n');
-
+        let message = str::from_utf8(&buf[..len]).unwrap();
+        info!("Message: {message}");
         if message.contains("version") {
             let message = format!("version=gruberb 1.0");
             tx.send((message.as_bytes().to_vec(), addr)).await.unwrap();
