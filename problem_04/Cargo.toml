@@ -1,0 +1,17 @@
+[package]
+name = "problem_04"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "server"
+path = "bin/server.rs"
+
+[[bin]]
+name = "client"
+path = "bin/client.rs"
+
+[dependencies]
+tokio = { version = "1.14.0", features = ["full"] }
+tracing = "0.1.37"
+tracing-subscriber = "0.3.17"
