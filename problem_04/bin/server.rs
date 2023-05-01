@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Mutex;
 use std::{io, net::SocketAddr, str, sync::Arc};
 use tokio::{net::UdpSocket, sync::mpsc};
 use tracing::info;
@@ -13,7 +14,7 @@ async fn main() -> io::Result<()> {
     let r = Arc::new(sock);
     let s = r.clone();
     let (tx, mut rx) = mpsc::channel::<(Vec<u8>, SocketAddr)>(1_000);
-    let mut storage = HashMap::<String, String>::new();
+    let storage = Arc::new(Mutex::new(HashMap::<String, String>::new()));
 
     tokio::spawn(async move {
         info!("Send back!");
@@ -32,11 +33,16 @@ async fn main() -> io::Result<()> {
             let message = format!("version=gruberb 1.0");
             tx.send((message.as_bytes().to_vec(), addr)).await.unwrap();
         } else if message.contains("=") {
-            let (key, value) = message.split_once('=').unwrap();
+            let (mut key, value) = message.split_once('=').unwrap();
+            if key.is_empty() {
+                key = " ";
+            }
             storage
+                .lock()
+                .unwrap()
                 .insert(key.to_string(), value.to_string());
         } else {
-            let value = storage.get(message).unwrap_or(&String::new()).clone();
+            let value = storage.lock().unwrap().get(message).unwrap_or(&String::new()).clone();
             let message = format!("{message}={value}");
             tx.send((message.as_bytes().to_vec(), addr)).await.unwrap();
         }
