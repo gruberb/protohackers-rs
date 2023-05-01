@@ -13,7 +13,7 @@ async fn main() -> io::Result<()> {
 
     tokio::spawn(async move {
         while let Some((bytes, addr)) = rx.recv().await {
-            let len = s.send_to(&bytes, &addr).await.unwrap();
+            let _ = s.send_to(&bytes, &addr).await.unwrap();
         }
     });
 
@@ -22,17 +22,22 @@ async fn main() -> io::Result<()> {
         let (len, addr) = r.recv_from(&mut buf).await?;
         let message = str::from_utf8(&buf[..len]).unwrap().trim_matches('\n');
 
-        if message.contains("=") {
-            let (key, value) = message.split_once('=').unwrap();
-
+        if message.contains("version") {
+            let message = format!("version=gruberb 1.0");
+            tx.send((message.as_bytes().to_vec(), addr)).await.unwrap();
+        } else if message.contains("=") {
+            let (mut key, value) = message.split_once('=').unwrap();
+            if key.is_empty() {
+                key = " ";
+            }
             storage
                 .lock()
                 .unwrap()
                 .insert(key.to_string(), value.to_string());
-            // continue;
         } else {
             let value = storage.lock().unwrap().get(message).unwrap().clone();
-            tx.send((value.as_bytes().to_vec(), addr)).await.unwrap();
+            let message = format!("{message}={value}");
+            tx.send((message.as_bytes().to_vec(), addr)).await.unwrap();
         }
 
         buf.fill(0);
