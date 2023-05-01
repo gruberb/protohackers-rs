@@ -42,7 +42,7 @@ async fn main() -> io::Result<()> {
                 .unwrap()
                 .insert(key.to_string(), value.to_string());
         } else {
-            let value = storage.lock().unwrap().get(message).unwrap().clone();
+            let value = storage.lock().unwrap().get(message).unwrap_or(&String::new()).clone();
             let message = format!("{message}={value}");
             tx.send((message.as_bytes().to_vec(), addr)).await.unwrap();
         }
