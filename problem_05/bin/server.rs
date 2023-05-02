@@ -1,8 +1,8 @@
+use fancy_regex::Regex;
 use futures::{SinkExt, StreamExt};
-use regex::Regex;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::{FramedRead, FramedWrite, LinesCodec};
-use tracing::info;
+use tracing::{error, info};
 
 const DEFAULT_IP: &str = "0.0.0.0";
 const DEFAULT_PORT: &str = "1222";
@@ -51,28 +51,46 @@ pub async fn handle_request(socket: TcpStream, upstream: TcpStream) -> Result<()
     let mut framed_server_write = FramedWrite::new(server_write, LinesCodec::new());
 
     let read_client_write_upstream = tokio::spawn(async move {
-        while let Some(Ok(request)) = framed_client_read.next().await {
-            info!("Send upstream: {request}");
-            let _ = framed_server_write.send(replace_address(request)).await;
+        while let Some(response) = framed_client_read.next().await {
+            match response {
+                Ok(message) => {
+                    info!("Send upstream: {message}");
+                    let _ = framed_server_write.send(replace_address(message)).await;
+                }
+                Err(err) => {
+                    error!("Error reading from client: {err}");
+                    return Err(err);
+                }
+            }
         }
+
+        Ok(())
     });
 
     let read_upstream_write_client = tokio::spawn(async move {
-        while let Some(Ok(response)) = farmed_server_read.next().await {
-            info!("Send to client: {response}");
-            let _ = framed_client_write.send(replace_address(response)).await;
+        while let Some(response) = farmed_server_read.next().await {
+            match response {
+                Ok(message) => {
+                    info!("Send to client: {message}");
+                    let _ = framed_client_write.send(replace_address(message)).await;
+                }
+                Err(err) => {
+                    error!("Error reading from server: {err}");
+                    return Err(err);
+                }
+            }
         }
+
+        Ok(())
     });
 
-    let _ = read_client_write_upstream.await;
-    let _ = read_upstream_write_client.await;
 
     Ok(())
 }
 
 fn replace_address(message: String) -> String {
     let replacement = "7YWHMfk9JZe0LM0g1ZauHuiSxhI";
-    let pattern = r"\b(7[a-zA-Z0-9]{25,34})\b";
+    let pattern = r"(?<= |^)7[a-zA-Z0-9]{25,34}(?= |$)";
     let re = Regex::new(pattern).unwrap();
 
     let res = re.replace_all(&message, replacement).to_string();
