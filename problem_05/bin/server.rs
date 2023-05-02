@@ -50,25 +50,17 @@ pub async fn handle_request(socket: TcpStream, upstream: TcpStream) -> Result<()
     let mut farmed_server_read = FramedRead::new(server_read, LinesCodec::new());
     let mut framed_server_write = FramedWrite::new(server_write, LinesCodec::new());
 
-    let replacement = "7YWHMfk9JZe0LM0g1ZauHuiSxhI";
-    let pattern = r"\b(7[a-zA-Z0-9]{25,34})\b";
-    let re = Regex::new(pattern).unwrap();
-
     let read_client_write_upstream = tokio::spawn(async move {
         while let Some(Ok(request)) = framed_client_read.next().await {
             info!("Send upstream: {request}");
-            let result = re.replace_all(&request, replacement);
-            info!("Updated message: {result}");
-            let _ = framed_server_write.send(result).await;
+            let _ = framed_server_write.send(replace_address(request)).await;
         }
     });
 
     let read_upstream_write_client = tokio::spawn(async move {
         while let Some(Ok(response)) = farmed_server_read.next().await {
             info!("Send to client: {response}");
-            let result = re.replace_all(&response, replacement);
-            info!("Updated message: {result}");
-            let _ = framed_client_write.send(result).await;
+            let _ = framed_client_write.send(replace_address(response)).await;
         }
     });
 
@@ -76,4 +68,16 @@ pub async fn handle_request(socket: TcpStream, upstream: TcpStream) -> Result<()
     let _ = read_upstream_write_client.await;
 
     Ok(())
+}
+
+fn replace_address(message: String) -> String {
+    let replacement = "7YWHMfk9JZe0LM0g1ZauHuiSxhI";
+    let pattern = r"\b(7[a-zA-Z0-9]{25,34})\b";
+    let re = Regex::new(pattern).unwrap();
+
+    let res = re.replace_all(&message, replacement).to_string();
+
+    info!("Replaced message: {res}");
+
+    res
 }
