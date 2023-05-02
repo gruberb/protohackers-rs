@@ -1,10 +1,10 @@
+use futures::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
-use tracing::{info, error};
-use std::net::SocketAddr;
-use tokio_util::codec::{Framed, LinesCodec};
-use tokio::sync::broadcast;
+use tokio_util::codec::{FramedRead, FramedWrite, LinesCodec};
+use tracing::info;
 
-const DEFAULT_IP: &str = "0.0.0.0";
+
+const DEFAULT_IP: &str = "127.0.0.1";
 const DEFAULT_PORT: &str = "1222";
 
 const UPSTREAM_IP: &str = "206.189.113.124";
@@ -13,49 +13,60 @@ const UPSTREAM_PORT: &str = "16963";
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Result<T> = std::result::Result<T, Error>;
 
-enum Events {
-    ClientRequest(String),
-    ClientResponse(String),
-    UpstreamRequest(String),
-    UpstreamResponse(String),
-}
-
 #[tokio::main]
 pub async fn main() -> Result<()> {
-    tracing_subscriber::fmt::try_init()?;
+    tracing_subscriber::fmt::try_init().expect("Cannot init tracing");
 
     let listener = TcpListener::bind(&format!("{DEFAULT_IP}:{DEFAULT_PORT}")).await?;
-    let stream = TcpStream::connect(&format!("{UPSTREAM_IP}:{UPSTREAM_PORT}")).await?;
-
-    let (sender, receiver) = broadcast::channel(2);
 
     info!("Start TCP server on {DEFAULT_IP}:{DEFAULT_PORT}");
-    info!("Connect to upstream on {UPSTREAM_IP}:{UPSTREAM_PORT}");
 
-    let listener_handle = tokio::spawn(async move {
-        loop {
-            let (socket, address) = listener.accept().await?;
+    loop {
+        let (socket, address) = listener
+            .accept()
+            .await
+            .expect("Cannot establish connection");
 
-            tokio::spawn(async move {
-                info!("New request from: {address}");
-                let _ = handle_request(socket).await;
-            });
-        }
-    });
+        info!("New request from: {address}");
 
-    let upstream_handle = tokio::spawn({
-        loop {
+        let upstream = TcpStream::connect(&format!("{UPSTREAM_IP}:{UPSTREAM_PORT}"))
+            .await
+            .expect("Cannot establish upstream connection");
 
-        }
-    });
+        info!("Connect to upstream on {UPSTREAM_IP}:{UPSTREAM_PORT}");
 
-    let _ = listener_handle.await;
-    let _ = upstream_handle.await;
-
-    Ok(())
-
+        tokio::spawn(async move {
+            let _ = handle_request(socket, upstream).await;
+        });
+    }
 }
 
-pub async fn handle_request(mut socket: TcpStream) -> Result<()> {
-    let framed = Framed::new(socket, LinesCodec::new());
+pub async fn handle_request(socket: TcpStream, upstream: TcpStream) -> Result<()> {
+    let (client_read, client_write) = socket.into_split();
+    let mut framed_client_read = FramedRead::new(client_read, LinesCodec::new());
+    let mut framed_client_write = FramedWrite::new(client_write, LinesCodec::new());
+
+    let (server_read, server_write) = upstream.into_split();
+    let mut farmed_server_read = FramedRead::new(server_read, LinesCodec::new());
+    let mut framed_server_write = FramedWrite::new(server_write, LinesCodec::new());
+
+
+    let read_client_write_upstream = tokio::spawn(async move {
+        while let Some(Ok(request)) = framed_client_read.next().await {
+            info!("Send upstream: {request}");
+            let _ = framed_server_write.send(request).await;
+        }
+    });
+
+    let read_upstream_write_client = tokio::spawn(async move {
+        while let Some(Ok(response)) = farmed_server_read.next().await {
+            info!("Send to client: {response}");
+            let _ = framed_client_write.send(response).await;
+        }
+    });
+
+    let _ = read_client_write_upstream.await;
+    let _ = read_upstream_write_client.await;
+
+    Ok(())
 }
