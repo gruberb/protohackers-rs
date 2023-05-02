@@ -1,10 +1,10 @@
 use futures::{SinkExt, StreamExt};
+use regex::Regex;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::{FramedRead, FramedWrite, LinesCodec};
 use tracing::info;
-use regex::Regex;
 
-const DEFAULT_IP: &str = "127.0.0.1";
+const DEFAULT_IP: &str = "0.0.0.0";
 const DEFAULT_PORT: &str = "1222";
 
 const UPSTREAM_IP: &str = "206.189.113.124";
@@ -66,7 +66,9 @@ pub async fn handle_request(socket: TcpStream, upstream: TcpStream) -> Result<()
     let read_upstream_write_client = tokio::spawn(async move {
         while let Some(Ok(response)) = farmed_server_read.next().await {
             info!("Send to client: {response}");
-            let _ = framed_client_write.send(response).await;
+            let result = re.replace_all(&response, replacement);
+            info!("Updated message: {result}");
+            let _ = framed_client_write.send(result).await;
         }
     });
 
