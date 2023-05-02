@@ -50,8 +50,8 @@ pub async fn handle_request(socket: TcpStream, upstream: TcpStream) -> Result<()
     let mut farmed_server_read = FramedRead::new(server_read, LinesCodec::new());
     let mut framed_server_write = FramedWrite::new(server_write, LinesCodec::new());
 
-    let pattern = "7[a-zA-Z0-9]{25,34}";
     let replacement = "7YWHMfk9JZe0LM0g1ZauHuiSxhI";
+    let pattern = r"\b(7[a-zA-Z0-9]{25,34})\b";
     let re = Regex::new(pattern).unwrap();
 
     let read_client_write_upstream = tokio::spawn(async move {
