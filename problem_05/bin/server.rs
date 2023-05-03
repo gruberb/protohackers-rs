@@ -50,42 +50,34 @@ pub async fn handle_request(socket: TcpStream, upstream: TcpStream) -> Result<()
     let mut farmed_server_read = FramedRead::new(server_read, LinesCodec::new());
     let mut framed_server_write = FramedWrite::new(server_write, LinesCodec::new());
 
-    let read_client_write_upstream = tokio::spawn(async move {
-        while let Some(response) = framed_client_read.next().await {
-            match response {
-                Ok(message) => {
-                    info!("Send upstream: {message}");
-                    let _ = framed_server_write.send(replace_address(message)).await;
+    loop {
+        tokio::select! {
+            Some(response) = framed_client_read.next() => {
+                match response {
+                    Ok(message) => {
+                        info!("Send upstream: {message}");
+                        let _ = framed_server_write.send(replace_address(message)).await;
+                    }
+                    Err(err) => {
+                        error!("Error reading from client: {err}");
+                        return Err(err.into());
+                    }
                 }
-                Err(err) => {
-                    error!("Error reading from client: {err}");
-                    return Err(err);
+            }
+            Some(response) = farmed_server_read.next() => {
+                match response {
+                    Ok(message) => {
+                        info!("Send to client: {message}");
+                        let _ = framed_client_write.send(replace_address(message)).await;
+                    }
+                    Err(err) => {
+                        error!("Error reading from server: {err}");
+                        return Err(err.into());
+                    }
                 }
             }
         }
-
-        Ok(())
-    });
-
-    let read_upstream_write_client = tokio::spawn(async move {
-        while let Some(response) = farmed_server_read.next().await {
-            match response {
-                Ok(message) => {
-                    info!("Send to client: {message}");
-                    let _ = framed_client_write.send(replace_address(message)).await;
-                }
-                Err(err) => {
-                    error!("Error reading from server: {err}");
-                    return Err(err);
-                }
-            }
-        }
-
-        Ok(())
-    });
-
-
-    Ok(())
+    }
 }
 
 fn replace_address(message: String) -> String {
