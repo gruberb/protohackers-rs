@@ -69,7 +69,7 @@ pub async fn handle_request(socket: TcpStream, upstream: TcpStream) -> Result<()
                     }
                     None => {
                         info!("Client closed the connection");
-                        return Ok(())
+                        break;
                     }
                 }
             }
@@ -90,12 +90,14 @@ pub async fn handle_request(socket: TcpStream, upstream: TcpStream) -> Result<()
                     }
                     None => {
                         info!("Server closed the connection");
-                        return Ok(())
+                        break;
                     }
                 }
             }
         }
     }
+
+    Ok(())
 }
 
 fn replace_address(message: String) -> String {
