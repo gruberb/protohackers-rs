@@ -1,7 +1,8 @@
 use fancy_regex::Regex;
 use futures::{SinkExt, StreamExt};
+use problem_05::StrictLinesCodec;
 use tokio::net::{TcpListener, TcpStream};
-use tokio_util::codec::{FramedRead, FramedWrite, LinesCodec};
+use tokio_util::codec::{FramedRead, FramedWrite};
 use tracing::{error, info};
 
 const DEFAULT_IP: &str = "0.0.0.0";
@@ -43,12 +44,12 @@ pub async fn main() -> Result<()> {
 
 pub async fn handle_request(socket: TcpStream, upstream: TcpStream) -> Result<()> {
     let (client_read, client_write) = socket.into_split();
-    let mut framed_client_read = FramedRead::new(client_read, LinesCodec::new());
-    let mut framed_client_write = FramedWrite::new(client_write, LinesCodec::new());
+    let mut framed_client_read = FramedRead::new(client_read, StrictLinesCodec::new());
+    let mut framed_client_write = FramedWrite::new(client_write, StrictLinesCodec::new());
 
     let (server_read, server_write) = upstream.into_split();
-    let mut framed_server_read = FramedRead::new(server_read, LinesCodec::new());
-    let mut framed_server_write = FramedWrite::new(server_write, LinesCodec::new());
+    let mut framed_server_read = FramedRead::new(server_read, StrictLinesCodec::new());
+    let mut framed_server_write = FramedWrite::new(server_write, StrictLinesCodec::new());
 
     loop {
         tokio::select! {
