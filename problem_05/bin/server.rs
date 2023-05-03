@@ -52,28 +52,38 @@ pub async fn handle_request(socket: TcpStream, upstream: TcpStream) -> Result<()
 
     loop {
         tokio::select! {
-            Some(response) = framed_client_read.next() => {
-                match response {
-                    Ok(message) => {
-                        info!("Send upstream: {message}");
-                        let _ = framed_server_write.send(replace_address(message)).await;
+            res = framed_client_read.next() => {
+                match res {
+                    Some(response) => {
+                        match response {
+                            Ok(message) => {
+                                info!("Send upstream: {message}");
+                                let _ = framed_server_write.send(replace_address(message)).await;
+                            }
+                            Err(err) => {
+                                error!("Error reading from client: {err}");
+                                return Err(err.into());
+                            }
+                        }
                     }
-                    Err(err) => {
-                        error!("Error reading from client: {err}");
-                        return Err(err.into());
-                    }
+                    None => return Ok(())
                 }
             }
-            Some(response) = farmed_server_read.next() => {
-                match response {
-                    Ok(message) => {
-                        info!("Send to client: {message}");
-                        let _ = framed_client_write.send(replace_address(message)).await;
+            res = farmed_server_read.next() => {
+                match res {
+                    Some(response) => {
+                        match response {
+                            Ok(message) => {
+                                info!("Send to client: {message}");
+                                let _ = framed_client_write.send(replace_address(message)).await;
+                            }
+                            Err(err) => {
+                                error!("Error reading from server: {err}");
+                                return Err(err.into());
+                            }
+                        }
                     }
-                    Err(err) => {
-                        error!("Error reading from server: {err}");
-                        return Err(err.into());
-                    }
+                    None => return Ok(())
                 }
             }
         }
