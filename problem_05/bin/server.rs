@@ -47,12 +47,13 @@ pub async fn handle_request(socket: TcpStream, upstream: TcpStream) -> Result<()
     let mut framed_client_write = FramedWrite::new(client_write, LinesCodec::new());
 
     let (server_read, server_write) = upstream.into_split();
-    let mut farmed_server_read = FramedRead::new(server_read, LinesCodec::new());
+    let mut framed_server_read = FramedRead::new(server_read, LinesCodec::new());
     let mut framed_server_write = FramedWrite::new(server_write, LinesCodec::new());
 
     loop {
         tokio::select! {
             res = framed_client_read.next() => {
+                info!("Response from client read: {:?}", res);
                 match res {
                     Some(response) => {
                         match response {
@@ -66,10 +67,14 @@ pub async fn handle_request(socket: TcpStream, upstream: TcpStream) -> Result<()
                             }
                         }
                     }
-                    None => return Ok(())
+                    None => {
+                        info!("Client closed the connection");
+                        return Ok(())
+                    }
                 }
             }
-            res = farmed_server_read.next() => {
+            res = framed_server_read.next() => {
+                info!("Response from server read: {:?}", res);
                 match res {
                     Some(response) => {
                         match response {
@@ -83,7 +88,10 @@ pub async fn handle_request(socket: TcpStream, upstream: TcpStream) -> Result<()
                             }
                         }
                     }
-                    None => return Ok(())
+                    None => {
+                        info!("Server closed the connection");
+                        return Ok(())
+                    }
                 }
             }
         }
