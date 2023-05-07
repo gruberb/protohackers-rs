@@ -26,7 +26,7 @@ struct Handler {
 type Timestamp = i32;
 type Price = i32;
 
-const MAX_CONNECTIONS: usize = 5;
+const MAX_CONNECTIONS: usize = 1500;
 
 pub async fn run(listener: TcpListener, shutdown: impl Future) -> crate::Result<()> {
     let (notify_shutdown, _) = broadcast::channel(1);

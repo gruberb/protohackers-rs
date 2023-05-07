@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
+name = "client"
+path = "bin/client.rs"
+
+[[bin]]
 name = "server"
 path = "bin/server.rs"
 

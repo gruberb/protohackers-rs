@@ -62,13 +62,6 @@ impl Connection {
     }
 
     pub async fn write_frame(&mut self, frame: &Frame) -> tokio::io::Result<()> {
-        debug!(?frame);
-        if let Frame::Response(mean) = frame {
-            let _ = self.stream.write_i32(*mean as i32).await?;
-            info!("Write frame Response to stream");
-            return self.stream.flush().await;
-        }
-
-        Ok(())
+        unimplemented!()
     }
 }
