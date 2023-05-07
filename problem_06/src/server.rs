@@ -1,6 +1,5 @@
 use crate::{frame::Frame, Connection, Shutdown};
 
-use std::collections::BTreeMap;
 use std::future::Future;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
@@ -19,12 +18,8 @@ struct Listener {
 struct Handler {
     connection: Connection,
     shutdown: Shutdown,
-    local_db: BTreeMap<Timestamp, Price>,
     _shutdown_complete: mpsc::Sender<()>,
 }
-
-type Timestamp = i32;
-type Price = i32;
 
 const MAX_CONNECTIONS: usize = 1500;
 
@@ -83,7 +78,6 @@ impl Listener {
             let mut handler = Handler {
                 connection: Connection::new(socket),
                 shutdown: Shutdown::new(self.notify_shutdown.subscribe()),
-                local_db: BTreeMap::new(),
                 _shutdown_complete: self.shutdown_complete_tx.clone(),
             };
 
@@ -129,12 +123,28 @@ impl Handler {
                 }
             };
 
-            debug!(?maybe_frame);
-
             let frame = match maybe_frame {
                 Some(frame) => frame,
                 None => return Ok(()),
             };
+
+            match frame {
+                Frame::Error { msg } => {
+                    info!("Error message: {msg}")
+                }
+                Frame::Plate { plate, timestamp } => {
+                    info!("Plate: {plate}, timestamp: {timestamp}");
+                }
+                Frame::WantHeartbeat { interval } => {
+                    info!("Want heartbeat: {interval}");
+                }
+                Frame::IAmCamera { road, mile, limit } => {
+                    info!("Road: {road}, mile: {mile}, limit: {limit}");
+                }
+                Frame::IAmDispatcher { roads } => {
+                    info!("roads: {roads:?}");
+                }
+            }
         }
 
         Ok(())

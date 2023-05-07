@@ -3,10 +3,16 @@ use std::fmt;
 use std::io::Cursor;
 use std::num::TryFromIntError;
 use std::string::FromUtf8Error;
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 #[derive(Clone, Debug)]
-pub enum Frame {}
+pub enum Frame {
+    Error { msg: String },
+    Plate { plate: String, timestamp: u32 },
+    WantHeartbeat { interval: u32 },
+    IAmCamera { road: u16, mile: u16, limit: u16 },
+    IAmDispatcher { roads: Vec<u16> },
+}
 
 #[derive(Debug)]
 pub enum Error {
@@ -38,7 +44,8 @@ impl Frame {
             // }
             // Want Heartbeat: interval: u32
             0x40 => {
-                unimplemented!()
+                get_u32(src)?;
+                Ok(())
             }
             // Heartbeat (just Server -> Client)
             // 0x41 => {
@@ -46,27 +53,79 @@ impl Frame {
             // }
             // IAmCamera: road: u16, mile: u16, limit: u16
             0x80 => {
-                unimplemented!()
+                // road
+                get_u16(src)?;
+                // mile
+                get_u16(src)?;
+                // limit
+                get_u16(src)?;
+                Ok(())
             }
-            // IAmDispatcher: numroads: u8, numroads: [u16]
+            // IAmDispatcher: numroads: u8, roads: [u16]
             0x81 => {
-                unimplemented!()
+                // numroads
+                let amount = get_u8(src)? * 2;
+                // roads
+                skip(src, amount as usize)?;
+                Ok(())
             }
             actual => Err(format!("protocol error; invalid frame type byte `{}`", actual).into()),
         }
     }
 
     pub fn parse(src: &mut Cursor<&[u8]>) -> Result<Frame, Error> {
-        unimplemented!()
-    }
-}
+        match get_u8(src)? {
+            // Error: msg: str
+            0x10 => {
+                let n = get_length(src)?;
+                let msg = get_str(src, n)?.to_string();
+                Ok(Frame::Error { msg })
+            }
+            // Plate: plate: str, timestamp: u32
+            0x20 => {
+                // Read length character of the plate string
+                let n = get_length(src)?;
+                // Skip the string to get to the timestamp
+                let plate = get_str(src, n)?.to_string();
+                // check if valid timestamp
+                let timestamp = get_u32(src)?;
+                Ok(Frame::Plate { plate, timestamp })
+            }
+            // Ticket (just Server -> Client)
+            // 0x21 => {
+            //     Ok(())
+            // }
+            // Want Heartbeat: interval: u32
+            0x40 => {
+                let interval = get_u32(src)?;
+                Ok(Frame::WantHeartbeat { interval })
+            }
+            // Heartbeat (just Server -> Client)
+            // 0x41 => {
+            //     Ok(())
+            // }
+            // IAmCamera: road: u16, mile: u16, limit: u16
+            0x80 => {
+                // road
+                let road = get_u16(src)?;
+                // mile
+                let mile = get_u16(src)?;
+                // limit
+                let limit = get_u16(src)?;
+                Ok(Frame::IAmCamera { road, mile, limit })
+            }
+            // IAmDispatcher: numroads: u8, roads: [u16]
+            0x81 => {
+                // numroads
+                let numroads = get_u8(src)?;
+                // roads
+                let roads = get_u16_vec(src, numroads as usize)?;
 
-fn peek_u8(src: &mut Cursor<&[u8]>) -> Result<u8, Error> {
-    if !src.has_remaining() {
-        return Err(Error::Incomplete);
+                Ok(Frame::IAmDispatcher { roads })
+            }
+            actual => Err(format!("protocol error; invalid frame type byte `{}`", actual).into()),
+        }
     }
-
-    Ok(src.chunk()[0])
 }
 
 fn get_str<'a>(src: &mut Cursor<&'a [u8]>, len: usize) -> Result<&'a str, Error> {
@@ -85,6 +144,22 @@ fn get_str<'a>(src: &mut Cursor<&'a [u8]>, len: usize) -> Result<&'a str, Error>
     message
 }
 
+fn get_u16_vec<'a>(src: &mut Cursor<&'a [u8]>, len: usize) -> Result<Vec<u16>, Error> {
+    if src.remaining() < len {
+        return Err(Error::Incomplete);
+    }
+
+    let mut roads = Vec::new();
+
+    for _ in 0..len {
+        let road = src.get_u16();
+        debug!(?road);
+        roads.push(road);
+    }
+
+    Ok(roads)
+}
+
 fn skip(src: &mut Cursor<&[u8]>, n: usize) -> Result<(), Error> {
     if src.remaining() < n {
         return Err(Error::Incomplete);
@@ -100,9 +175,16 @@ fn get_u8(src: &mut Cursor<&[u8]>) -> Result<u8, Error> {
         return Err(Error::Incomplete);
     }
 
-    info!("get_u8: current cursor position: {:?}", src.position());
-
     Ok(src.get_u8())
+}
+
+fn get_u16(src: &mut Cursor<&[u8]>) -> Result<u16, Error> {
+    if !src.has_remaining() {
+        error!("Incomplete frame");
+        return Err(Error::Incomplete);
+    }
+
+    Ok(src.get_u16())
 }
 
 fn get_u32(src: &mut Cursor<&[u8]>) -> Result<u32, Error> {
@@ -110,8 +192,6 @@ fn get_u32(src: &mut Cursor<&[u8]>) -> Result<u32, Error> {
         error!("Incomplete frame");
         return Err(Error::Incomplete);
     }
-
-    info!("get_u32: current cursor position: {:?}", src.position());
 
     Ok(src.get_u32())
 }
@@ -123,13 +203,7 @@ fn get_length(src: &mut Cursor<&[u8]>) -> Result<usize, Error> {
         return Err(Error::Incomplete);
     }
 
-    info!("get_length: current cursor position: {:?}", src.position());
-
     Ok(src.get_u8() as usize)
-}
-
-fn get_line<'a>(src: &mut Cursor<&'a [u8]>) -> Result<&'a [u8], Error> {
-    unimplemented!()
 }
 
 impl From<String> for Error {
