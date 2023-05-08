@@ -1,4 +1,4 @@
-use crate::{frame::Frame, Connection, Shutdown};
+use crate::{frame::ClientFrames, Connection, Shutdown};
 
 use std::future::Future;
 use std::sync::Arc;
@@ -8,6 +8,7 @@ use tokio::time::{self, Duration};
 use tracing::{debug, error, info};
 
 struct Listener {
+    db_holder: DbDropGuard,
     listener: TcpListener,
     limit_connections: Arc<Semaphore>,
     notify_shutdown: broadcast::Sender<()>,
@@ -129,19 +130,16 @@ impl Handler {
             };
 
             match frame {
-                Frame::Error { msg } => {
-                    info!("Error message: {msg}")
-                }
-                Frame::Plate { plate, timestamp } => {
+                ClientFrames::Plate { plate, timestamp } => {
                     info!("Plate: {plate}, timestamp: {timestamp}");
                 }
-                Frame::WantHeartbeat { interval } => {
+                ClientFrames::WantHeartbeat { interval } => {
                     info!("Want heartbeat: {interval}");
                 }
-                Frame::IAmCamera { road, mile, limit } => {
+                ClientFrames::IAmCamera { road, mile, limit } => {
                     info!("Road: {road}, mile: {mile}, limit: {limit}");
                 }
-                Frame::IAmDispatcher { roads } => {
+                ClientFrames::IAmDispatcher { roads } => {
                     info!("roads: {roads:?}");
                 }
             }

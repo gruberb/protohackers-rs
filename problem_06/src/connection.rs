@@ -1,4 +1,4 @@
-use crate::frame::{self, Frame};
+use crate::frame::{self, ClientFrames, ServerFrames};
 
 use bytes::{Buf, BytesMut};
 use std::io::Cursor;
@@ -20,7 +20,7 @@ impl Connection {
         }
     }
 
-    pub async fn read_frame(&mut self) -> crate::Result<Option<Frame>> {
+    pub async fn read_frame(&mut self) -> crate::Result<Option<ClientFrames>> {
         loop {
             info!("Loop read_frame");
             if let Some(frame) = self.parse_frame()? {
@@ -38,20 +38,20 @@ impl Connection {
         }
     }
 
-    fn parse_frame(&mut self) -> crate::Result<Option<Frame>> {
+    fn parse_frame(&mut self) -> crate::Result<Option<ClientFrames>> {
         use frame::Error::Incomplete;
 
         let mut buf = Cursor::new(&self.buffer[..]);
         debug!(?buf);
 
-        match Frame::check(&mut buf) {
+        match ClientFrames::check(&mut buf) {
             Ok(_) => {
                 info!("Frame::check succesful");
                 let len = buf.position() as usize;
                 debug!(?len);
                 buf.set_position(0);
 
-                let frame = Frame::parse(&mut buf)?;
+                let frame = ClientFrames::parse(&mut buf)?;
                 self.buffer.advance(len);
 
                 Ok(Some(frame))
@@ -61,7 +61,7 @@ impl Connection {
         }
     }
 
-    pub async fn write_frame(&mut self, frame: &Frame) -> tokio::io::Result<()> {
+    pub async fn write_frame(&mut self, frame: &ServerFrames) -> tokio::io::Result<()> {
         unimplemented!()
     }
 }

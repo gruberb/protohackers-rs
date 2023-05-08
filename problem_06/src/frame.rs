@@ -6,12 +6,28 @@ use std::string::FromUtf8Error;
 use tracing::{debug, error};
 
 #[derive(Clone, Debug)]
-pub enum Frame {
-    Error { msg: String },
+pub enum ClientFrames {
     Plate { plate: String, timestamp: u32 },
     WantHeartbeat { interval: u32 },
     IAmCamera { road: u16, mile: u16, limit: u16 },
     IAmDispatcher { roads: Vec<u16> },
+}
+
+#[derive(Clone, Debug)]
+pub enum ServerFrames {
+    Error {
+        msg: String,
+    },
+    Ticket {
+        plate: String,
+        road: u16,
+        mile1: u16,
+        timestamp1: u16,
+        mile2: u16,
+        timestamp2: u16,
+        speed: u16,
+    },
+    Heartbeat,
 }
 
 #[derive(Debug)]
@@ -20,14 +36,14 @@ pub enum Error {
     Other(crate::Error),
 }
 
-impl Frame {
+impl ClientFrames {
     pub fn check(src: &mut Cursor<&[u8]>) -> Result<(), Error> {
         match get_u8(src)? {
-            // Error: msg: str
-            0x10 => {
-                let n = get_length(src)?;
-                skip(src, n as usize)
-            }
+            // Error: msg: str (Server -> Client)
+            // 0x10 => {
+            //     let n = get_length(src)?;
+            //     skip(src, n as usize)
+            // }
             // Plate: plate: str, timestamp: u32
             0x20 => {
                 // Read length character of the plate string
@@ -73,14 +89,14 @@ impl Frame {
         }
     }
 
-    pub fn parse(src: &mut Cursor<&[u8]>) -> Result<Frame, Error> {
+    pub fn parse(src: &mut Cursor<&[u8]>) -> Result<ClientFrames, Error> {
         match get_u8(src)? {
-            // Error: msg: str
-            0x10 => {
-                let n = get_length(src)?;
-                let msg = get_str(src, n)?.to_string();
-                Ok(Frame::Error { msg })
-            }
+            // Error: msg: str (Server -> Client)
+            // 0x10 => {
+            //     let n = get_length(src)?;
+            //     let msg = get_str(src, n)?.to_string();
+            //     Ok(Frame::Error { msg })
+            // }
             // Plate: plate: str, timestamp: u32
             0x20 => {
                 // Read length character of the plate string
@@ -89,7 +105,7 @@ impl Frame {
                 let plate = get_str(src, n)?.to_string();
                 // check if valid timestamp
                 let timestamp = get_u32(src)?;
-                Ok(Frame::Plate { plate, timestamp })
+                Ok(ClientFrames::Plate { plate, timestamp })
             }
             // Ticket (just Server -> Client)
             // 0x21 => {
@@ -98,7 +114,7 @@ impl Frame {
             // Want Heartbeat: interval: u32
             0x40 => {
                 let interval = get_u32(src)?;
-                Ok(Frame::WantHeartbeat { interval })
+                Ok(ClientFrames::WantHeartbeat { interval })
             }
             // Heartbeat (just Server -> Client)
             // 0x41 => {
@@ -112,7 +128,7 @@ impl Frame {
                 let mile = get_u16(src)?;
                 // limit
                 let limit = get_u16(src)?;
-                Ok(Frame::IAmCamera { road, mile, limit })
+                Ok(ClientFrames::IAmCamera { road, mile, limit })
             }
             // IAmDispatcher: numroads: u8, roads: [u16]
             0x81 => {
@@ -121,7 +137,7 @@ impl Frame {
                 // roads
                 let roads = get_u16_vec(src, numroads as usize)?;
 
-                Ok(Frame::IAmDispatcher { roads })
+                Ok(ClientFrames::IAmDispatcher { roads })
             }
             actual => Err(format!("protocol error; invalid frame type byte `{}`", actual).into()),
         }

@@ -2,7 +2,7 @@ mod connection;
 pub use connection::Connection;
 
 pub mod frame;
-pub use frame::Frame;
+pub use frame::ClientFrames;
 
 pub mod server;
 
