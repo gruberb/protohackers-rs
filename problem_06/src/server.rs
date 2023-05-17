@@ -1,4 +1,8 @@
-use crate::{frame::ClientFrames, Connection, Shutdown};
+use crate::{
+    db::{Db, DbHolder},
+    frame::{ClientFrames, ServerFrames},
+    ticketing, Connection, Shutdown,
+};
 
 use std::future::Future;
 use std::sync::Arc;
@@ -8,16 +12,19 @@ use tokio::time::{self, Duration};
 use tracing::{debug, error, info};
 
 struct Listener {
-    db_holder: DbDropGuard,
     listener: TcpListener,
+    db_holder: DbHolder,
     limit_connections: Arc<Semaphore>,
     notify_shutdown: broadcast::Sender<()>,
-    shutdown_complete_rx: mpsc::Receiver<()>,
     shutdown_complete_tx: mpsc::Sender<()>,
 }
 
 struct Handler {
     connection: Connection,
+    receive_ticket: broadcast::Receiver<ServerFrames>,
+    send_ticket: broadcast::Sender<ServerFrames>,
+    connection_type: Option<ticketing::ClientType>,
+    db: Db,
     shutdown: Shutdown,
     _shutdown_complete: mpsc::Sender<()>,
 }
@@ -26,14 +33,14 @@ const MAX_CONNECTIONS: usize = 1500;
 
 pub async fn run(listener: TcpListener, shutdown: impl Future) -> crate::Result<()> {
     let (notify_shutdown, _) = broadcast::channel(1);
-    let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
+    let (shutdown_complete_tx, mut shutdown_complete_rx) = mpsc::channel(1);
 
     let mut server = Listener {
         listener,
+        db_holder: DbHolder::new(),
         limit_connections: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
         notify_shutdown,
         shutdown_complete_tx,
-        shutdown_complete_rx,
     };
 
     tokio::select! {
@@ -48,7 +55,6 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) -> crate::Result<
     }
 
     let Listener {
-        mut shutdown_complete_rx,
         shutdown_complete_tx,
         notify_shutdown,
         ..
@@ -66,6 +72,11 @@ impl Listener {
     async fn run(&mut self) -> crate::Result<()> {
         info!("accepting inbound connections");
 
+        let (send_ticket, _): (
+            broadcast::Sender<ServerFrames>,
+            broadcast::Receiver<ServerFrames>,
+        ) = broadcast::channel(4096);
+
         loop {
             let permit = self
                 .limit_connections
@@ -78,6 +89,10 @@ impl Listener {
 
             let mut handler = Handler {
                 connection: Connection::new(socket),
+                send_ticket: send_ticket.clone(),
+                receive_ticket: send_ticket.subscribe(),
+                connection_type: None,
+                db: self.db_holder.db(),
                 shutdown: Shutdown::new(self.notify_shutdown.subscribe()),
                 _shutdown_complete: self.shutdown_complete_tx.clone(),
             };
@@ -122,6 +137,22 @@ impl Handler {
                     debug!("Shutdown");
                     return Ok(());
                 }
+                message = self.receive_ticket.recv() => {
+                    match message {
+                        Ok(message) => {
+                            match message {
+                                ServerFrames::Ticket {
+                                    ..
+                                } => {
+                                    let _ = self.connection.write_frame(message).await;
+                                }
+                                _ => ()
+                            }
+                        },
+                        Err(_) => return Ok(()),
+                    }
+                    None
+                }
             };
 
             let frame = match maybe_frame {
@@ -131,20 +162,42 @@ impl Handler {
 
             match frame {
                 ClientFrames::Plate { plate, timestamp } => {
-                    info!("Plate: {plate}, timestamp: {timestamp}");
+                    info!("Insert {plate} and {timestamp}");
+                    self.db.insert_plate(plate, timestamp);
                 }
                 ClientFrames::WantHeartbeat { interval } => {
                     info!("Want heartbeat: {interval}");
                 }
                 ClientFrames::IAmCamera { road, mile, limit } => {
+                    if self.connection_type.is_some() {
+                        return Err("Already connected".into());
+                    }
+                    self.set_connection_type(ticketing::ClientType::Camera(road, mile));
                     info!("Road: {road}, mile: {mile}, limit: {limit}");
                 }
                 ClientFrames::IAmDispatcher { roads } => {
-                    info!("roads: {roads:?}");
+                    if self.connection_type.is_some() {
+                        return Err("Already connected".into());
+                    }
+
+                    self.set_connection_type(ticketing::ClientType::Dispatcher);
+                    self.db
+                        .add_dispatcher(roads.to_vec(), self.send_ticket.clone());
                 }
             }
         }
 
         Ok(())
+    }
+
+    fn set_connection_type(&mut self, connection_type: ticketing::ClientType) {
+        match connection_type {
+            ticketing::ClientType::Camera(_, _) => {
+                self.connection_type = Some(connection_type);
+            }
+            ticketing::ClientType::Dispatcher => {
+                self.connection_type = Some(connection_type);
+            }
+        }
     }
 }

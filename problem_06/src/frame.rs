@@ -1,4 +1,4 @@
-use bytes::Buf;
+use bytes::{Buf, BufMut, BytesMut};
 use std::fmt;
 use std::io::Cursor;
 use std::num::TryFromIntError;
@@ -22,9 +22,9 @@ pub enum ServerFrames {
         plate: String,
         road: u16,
         mile1: u16,
-        timestamp1: u16,
+        timestamp1: u32,
         mile2: u16,
-        timestamp2: u16,
+        timestamp2: u32,
         speed: u16,
     },
     Heartbeat,
@@ -140,6 +140,52 @@ impl ClientFrames {
                 Ok(ClientFrames::IAmDispatcher { roads })
             }
             actual => Err(format!("protocol error; invalid frame type byte `{}`", actual).into()),
+        }
+    }
+}
+
+impl ServerFrames {
+    pub(crate) fn convert_to_bytes(&self) -> BytesMut {
+        match self {
+            ServerFrames::Error { msg } => {
+                let mut buf = BytesMut::with_capacity(1 + 1 + msg.len());
+
+                buf.put_u8(0x10);
+                buf.put_u8(msg.len() as u8);
+                buf.put_slice(msg.as_bytes());
+
+                return buf;
+            }
+            ServerFrames::Ticket {
+                plate,
+                road,
+                mile1,
+                timestamp1,
+                mile2,
+                timestamp2,
+                speed,
+            } => {
+                let mut buf = BytesMut::with_capacity(1 + 1 + plate.len() + 2 + 2 + 4 + 2 + 4 + 2);
+
+                buf.put_u8(0x21);
+                buf.put_u8(plate.len() as u8);
+                buf.put_slice(plate.as_bytes());
+                buf.put_u16(*road);
+                buf.put_u16(*mile1);
+                buf.put_u32(*timestamp1);
+                buf.put_u16(*mile2);
+                buf.put_u32(*timestamp2);
+                buf.put_u16(*speed);
+
+                return buf;
+            }
+            ServerFrames::Heartbeat => {
+                let mut buf = BytesMut::new();
+
+                buf.put_u8(0x41);
+
+                return buf;
+            }
         }
     }
 }

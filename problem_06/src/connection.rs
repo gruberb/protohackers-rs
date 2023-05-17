@@ -8,15 +8,15 @@ use tracing::{debug, info};
 
 #[derive(Debug)]
 pub struct Connection {
-    stream: BufWriter<TcpStream>,
     buffer: BytesMut,
+    pub(crate) stream: BufWriter<TcpStream>,
 }
 
 impl Connection {
     pub fn new(socket: TcpStream) -> Connection {
         Connection {
-            stream: BufWriter::new(socket),
             buffer: BytesMut::with_capacity(4 * 1024),
+            stream: BufWriter::new(socket),
         }
     }
 
@@ -61,7 +61,9 @@ impl Connection {
         }
     }
 
-    pub async fn write_frame(&mut self, frame: &ServerFrames) -> tokio::io::Result<()> {
-        unimplemented!()
+    pub async fn write_frame(&mut self, frame: ServerFrames) -> tokio::io::Result<()> {
+        let _ = self.stream.write_all(&frame.convert_to_bytes()).await;
+        self.stream.flush().await?;
+        Ok(())
     }
 }

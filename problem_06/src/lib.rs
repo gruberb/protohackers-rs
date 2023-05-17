@@ -4,7 +4,11 @@ pub use connection::Connection;
 pub mod frame;
 pub use frame::ClientFrames;
 
+pub mod db;
+
 pub mod server;
+
+pub mod ticketing;
 
 mod shutdown;
 use shutdown::Shutdown;
