@@ -2,22 +2,34 @@ use crate::frame::{self, ClientFrames, ServerFrames};
 
 use bytes::{Buf, BytesMut};
 use std::io::Cursor;
+use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::TcpStream;
 use tracing::{debug, info};
 
+pub(crate) enum ConnectionType {
+    Camera,
+    Dispatcher,
+}
+
 #[derive(Debug)]
 pub struct Connection {
+    pub address: SocketAddr,
     buffer: BytesMut,
     pub(crate) stream: BufWriter<TcpStream>,
 }
 
 impl Connection {
-    pub fn new(socket: TcpStream) -> Connection {
+    pub fn new(address: SocketAddr, socket: TcpStream) -> Connection {
         Connection {
+            address,
             buffer: BytesMut::with_capacity(4 * 1024),
             stream: BufWriter::new(socket),
         }
+    }
+
+    pub fn get_address(&self) -> SocketAddr {
+        self.address.clone()
     }
 
     pub async fn read_frame(&mut self) -> crate::Result<Option<ClientFrames>> {

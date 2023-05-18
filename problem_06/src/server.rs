@@ -1,7 +1,8 @@
 use crate::{
-    db::{Db, DbHolder},
+    connection::ConnectionType,
+    db::{Camera, CameraId, Db, DbHolder, DispatcherId, Plate},
     frame::{ClientFrames, ServerFrames},
-    ticketing, Connection, Shutdown,
+    Connection, Shutdown,
 };
 
 use std::future::Future;
@@ -21,9 +22,7 @@ struct Listener {
 
 struct Handler {
     connection: Connection,
-    receive_ticket: broadcast::Receiver<ServerFrames>,
-    send_ticket: broadcast::Sender<ServerFrames>,
-    connection_type: Option<ticketing::ClientType>,
+    connection_type: Option<ConnectionType>,
     db: Db,
     shutdown: Shutdown,
     _shutdown_complete: mpsc::Sender<()>,
@@ -72,11 +71,6 @@ impl Listener {
     async fn run(&mut self) -> crate::Result<()> {
         info!("accepting inbound connections");
 
-        let (send_ticket, _): (
-            broadcast::Sender<ServerFrames>,
-            broadcast::Receiver<ServerFrames>,
-        ) = broadcast::channel(4096);
-
         loop {
             let permit = self
                 .limit_connections
@@ -86,11 +80,10 @@ impl Listener {
                 .unwrap();
 
             let socket = self.accept().await?;
+            let address = socket.peer_addr()?;
 
             let mut handler = Handler {
-                connection: Connection::new(socket),
-                send_ticket: send_ticket.clone(),
-                receive_ticket: send_ticket.subscribe(),
+                connection: Connection::new(address, socket),
                 connection_type: None,
                 db: self.db_holder.db(),
                 shutdown: Shutdown::new(self.notify_shutdown.subscribe()),
@@ -130,74 +123,95 @@ impl Listener {
 
 impl Handler {
     async fn run(&mut self) -> crate::Result<()> {
+        let (send_message, mut receive_message): (
+            mpsc::Sender<ServerFrames>,
+            mpsc::Receiver<ServerFrames>,
+        ) = mpsc::channel(1024);
+
         while !self.shutdown.is_shutdown() {
-            let maybe_frame = tokio::select! {
-                res = self.connection.read_frame() => res?,
+            tokio::select! {
+                res = self.connection.read_frame() => {
+                    match res? {
+                        Some(frame) => {
+                            info!("Received frame");
+                           let _ = self.handle_client_frame(self.db.clone(), frame, send_message.clone()).await;
+                        },
+                        None => return Ok(()),
+                    }
+
+                }
+                message = receive_message.recv() => {
+                    match message {
+                        Some(message) => {
+                            let _ = self.connection.write_frame(message).await;
+                        },
+                        None => (),
+                    }
+                }
                 _ = self.shutdown.recv() => {
                     debug!("Shutdown");
                     return Ok(());
                 }
-                message = self.receive_ticket.recv() => {
-                    match message {
-                        Ok(message) => {
-                            match message {
-                                ServerFrames::Ticket {
-                                    ..
-                                } => {
-                                    let _ = self.connection.write_frame(message).await;
-                                }
-                                _ => ()
-                            }
-                        },
-                        Err(_) => return Ok(()),
-                    }
-                    None
-                }
             };
-
-            let frame = match maybe_frame {
-                Some(frame) => frame,
-                None => return Ok(()),
-            };
-
-            match frame {
-                ClientFrames::Plate { plate, timestamp } => {
-                    info!("Insert {plate} and {timestamp}");
-                    self.db.insert_plate(plate, timestamp);
-                }
-                ClientFrames::WantHeartbeat { interval } => {
-                    info!("Want heartbeat: {interval}");
-                }
-                ClientFrames::IAmCamera { road, mile, limit } => {
-                    if self.connection_type.is_some() {
-                        return Err("Already connected".into());
-                    }
-                    self.set_connection_type(ticketing::ClientType::Camera(road, mile));
-                    info!("Road: {road}, mile: {mile}, limit: {limit}");
-                }
-                ClientFrames::IAmDispatcher { roads } => {
-                    if self.connection_type.is_some() {
-                        return Err("Already connected".into());
-                    }
-
-                    self.set_connection_type(ticketing::ClientType::Dispatcher);
-                    self.db
-                        .add_dispatcher(roads.to_vec(), self.send_ticket.clone());
-                }
-            }
         }
 
         Ok(())
     }
 
-    fn set_connection_type(&mut self, connection_type: ticketing::ClientType) {
+    fn set_connection_type(&mut self, connection_type: ConnectionType) {
         match connection_type {
-            ticketing::ClientType::Camera(_, _) => {
+            ConnectionType::Camera => {
                 self.connection_type = Some(connection_type);
             }
-            ticketing::ClientType::Dispatcher => {
+            ConnectionType::Dispatcher => {
                 self.connection_type = Some(connection_type);
             }
         }
+    }
+
+    async fn handle_client_frame(
+        &mut self,
+        db: Db,
+        frame: ClientFrames,
+        send_message: mpsc::Sender<ServerFrames>,
+    ) -> crate::Result<()> {
+        match frame {
+            ClientFrames::Plate { plate, timestamp } => {
+                info!("Receive new plate {plate} {timestamp}");
+                db.insert_plate(
+                    CameraId(self.connection.get_address()),
+                    Plate { plate, timestamp },
+                );
+            }
+            ClientFrames::WantHeartbeat { interval } => {
+                info!("Want heartbeat: {interval}");
+            }
+            ClientFrames::IAmCamera { road, mile, limit } => {
+                if self.connection_type.is_some() {
+                    return Err("Already connected".into());
+                }
+                self.set_connection_type(ConnectionType::Camera);
+                info!("Set connection type to camera");
+
+                db.add_camera(
+                    CameraId(self.connection.get_address()),
+                    Camera { road, mile, limit },
+                );
+            }
+            ClientFrames::IAmDispatcher { roads } => {
+                if self.connection_type.is_some() {
+                    return Err("Already connected".into());
+                }
+
+                self.set_connection_type(ConnectionType::Dispatcher);
+                db.add_dispatcher(
+                    DispatcherId(self.connection.get_address()),
+                    roads.to_vec(),
+                    send_message.clone(),
+                );
+            }
+        }
+
+        Ok(())
     }
 }
