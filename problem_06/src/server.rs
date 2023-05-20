@@ -9,8 +9,9 @@ use tracing::{debug, error, info};
 
 use crate::{
 	connection::ConnectionType,
-	db::{Camera, CameraId, Db, DbHolder, DispatcherId, Plate},
+	db::{Camera, CameraId, Db, DbHolder, DispatcherId, Limit, Mile, Plate, Road, Timestamp},
 	frame::{ClientFrames, ServerFrames},
+	ticketing::issue_possible_ticket,
 	Connection, Shutdown,
 };
 
@@ -173,7 +174,7 @@ impl Handler {
 
 	async fn handle_client_frame(
 		&mut self,
-		db: Db,
+		mut db: Db,
 		frame: ClientFrames,
 		send_message: mpsc::Sender<ServerFrames>,
 	) -> crate::Result<()> {
@@ -182,7 +183,19 @@ impl Handler {
 				info!("Receive new plate {plate} {timestamp}");
 				db.insert_plate(
 					CameraId(self.connection.get_address()),
-					Plate { plate, timestamp },
+					Plate {
+						plate: plate.clone(),
+						timestamp: Timestamp(timestamp),
+					},
+				);
+
+				issue_possible_ticket(
+					&mut db,
+					Plate {
+						plate,
+						timestamp: Timestamp(timestamp),
+					},
+					CameraId(self.connection.get_address()),
 				);
 			}
 			ClientFrames::WantHeartbeat { interval } => {
@@ -197,7 +210,11 @@ impl Handler {
 
 				db.add_camera(
 					CameraId(self.connection.get_address()),
-					Camera { road, mile, limit },
+					Camera {
+						road: Road(road),
+						mile: Mile(mile),
+						limit: Limit(limit),
+					},
 				);
 			}
 			ClientFrames::IAmDispatcher { roads } => {

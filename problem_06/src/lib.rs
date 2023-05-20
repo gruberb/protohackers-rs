@@ -8,6 +8,8 @@ pub mod db;
 
 pub mod server;
 
+pub mod ticketing;
+
 mod shutdown;
 use shutdown::Shutdown;
 
