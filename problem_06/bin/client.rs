@@ -13,7 +13,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let (mut read, mut write) = stream.split();
 
 	// test_all_different_messages(&mut write).await?;
-	test_camera_connection(&mut write).await?;
+	// test_camera_connection(&mut write).await?;
+	test_dipatcher_connection(&mut write).await?;
 
 	let mut buf: [u8; 4] = [0; 4];
 
