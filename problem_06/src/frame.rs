@@ -36,6 +36,7 @@ pub enum Error {
 
 impl ClientFrames {
 	pub fn check(src: &mut Cursor<&[u8]>) -> Result<(), Error> {
+		info!("Checking message: {src:?}");
 		match get_u8(src)? {
 			// Error: msg: str (Server -> Client)
 			// 0x10 => {
