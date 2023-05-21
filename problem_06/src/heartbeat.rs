@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use tokio::sync::mpsc;
-use tracing::{debug, error};
+use tracing::error;
 
 use crate::frame::ServerFrames;
 
@@ -35,7 +35,6 @@ impl Heartbeat {
 		interval.tick().await;
 
 		loop {
-			debug!("Heartbeat");
 			interval.tick().await;
 			if let Err(e) = self.message.send(ServerFrames::Heartbeat).await {
 				error!("Error sending heartbeat: {}", e);

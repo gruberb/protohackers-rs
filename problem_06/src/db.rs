@@ -5,7 +5,7 @@ use std::{
 };
 
 use tokio::sync::mpsc;
-use tracing::debug;
+use tracing::info;
 
 use crate::frame::ServerFrames;
 
@@ -112,9 +112,9 @@ impl Db {
 	}
 
 	pub(crate) fn add_camera(&self, camera_id: CameraId, camera: Camera) {
+		info!("Add new camera: {camera:?}");
 		let mut state = self.state.lock().unwrap();
 		state.cameras.insert(camera_id, camera);
-		debug!(?state);
 	}
 
 	pub(crate) fn add_dispatcher(
@@ -123,6 +123,7 @@ impl Db {
 		roads: Vec<u16>,
 		writer_stream: mpsc::Sender<ServerFrames>,
 	) {
+		info!("Add new dispatcher: {roads:?}");
 		let mut state = self.state.lock().unwrap();
 
 		for r in roads.iter() {
@@ -132,8 +133,6 @@ impl Db {
 				.or_insert(Vec::new())
 				.push((dispatcher_id.clone(), writer_stream.clone()));
 		}
-
-		debug!(?state);
 	}
 
 	pub(crate) fn get_dispatcher_for_road(&self, road: Road) -> Option<mpsc::Sender<ServerFrames>> {
@@ -147,6 +146,7 @@ impl Db {
 	}
 
 	pub(crate) fn add_open_ticket(&self, ticket: Ticket) {
+		info!("Add open ticket: {ticket:?}");
 		let mut state = self.state.lock().unwrap();
 		state
 			.open_tickets
@@ -165,7 +165,7 @@ impl Db {
 	}
 
 	pub(crate) fn add_plate(&self, camera_id: CameraId, plate: Plate) {
-		let state = self.state.lock().unwrap();
+		info!("Add car: {plate:?}");
 		let camera = self.get_camera(camera_id).unwrap();
 
 		match self
@@ -183,16 +183,14 @@ impl Db {
 				);
 			}
 		}
-
-		debug!(?state);
 	}
 
 	pub(crate) fn ticket_plate(&self, day: u32, plate_name: String) {
+		info!("Add ticket for day: {day}:{plate_name}");
 		let mut state = self.state.lock().unwrap();
 		state
 			.ticketed_plates_by_day
 			.insert((Timestamp(day), plate_name));
-		debug!(?state);
 	}
 
 	pub(crate) fn is_plate_ticketed_for_day(&self, day: u32, plate_name: String) -> bool {

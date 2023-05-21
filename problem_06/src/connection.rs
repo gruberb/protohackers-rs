@@ -5,7 +5,6 @@ use tokio::{
 	io::{AsyncReadExt, AsyncWriteExt, BufWriter},
 	net::TcpStream,
 };
-use tracing::{debug, info};
 
 use crate::frame::{self, ClientFrames, ServerFrames};
 
@@ -36,9 +35,7 @@ impl Connection {
 
 	pub async fn read_frame(&mut self) -> crate::Result<Option<ClientFrames>> {
 		loop {
-			info!("Loop read_frame");
 			if let Some(frame) = self.parse_frame()? {
-				info!("Frame parsed");
 				return Ok(Some(frame));
 			}
 
@@ -56,13 +53,10 @@ impl Connection {
 		use frame::Error::Incomplete;
 
 		let mut buf = Cursor::new(&self.buffer[..]);
-		debug!(?buf);
 
 		match ClientFrames::check(&mut buf) {
 			Ok(_) => {
-				info!("Frame::check succesful");
 				let len = buf.position() as usize;
-				debug!(?len);
 				buf.set_position(0);
 
 				let frame = ClientFrames::parse(&mut buf)?;
