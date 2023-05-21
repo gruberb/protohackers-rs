@@ -1,6 +1,8 @@
-use crate::frame::ServerFrames;
 use std::time::Duration;
+
 use tokio::sync::mpsc;
+
+use crate::frame::ServerFrames;
 
 pub(crate) struct Heartbeat {
 	is_running: bool,
