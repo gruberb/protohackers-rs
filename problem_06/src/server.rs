@@ -144,15 +144,15 @@ impl Handler {
 					}
 
 				}
-				message = receive_message.recv() => {
-					info!("Received a message through the channel");
-					match message {
-						Some(message) => {
-							let _ = self.connection.write_frame(message).await;
-						},
-						None => (),
-					}
-				}
+				// message = receive_message.recv() => {
+				// 	info!("Received a message through the channel");
+				// 	match message {
+				// 		Some(message) => {
+				// 			let _ = self.connection.write_frame(message).await;
+				// 		},
+				// 		None => (),
+				// 	}
+				// }
 				_ = self.shutdown.recv() => {
 					debug!("Shutdown");
 					return Ok(());
