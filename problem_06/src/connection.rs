@@ -5,7 +5,6 @@ use tokio::{
 	io::{AsyncReadExt, AsyncWriteExt, BufWriter},
 	net::TcpStream,
 };
-
 use tracing::info;
 
 use crate::frame::{self, ClientFrames, ServerFrames};

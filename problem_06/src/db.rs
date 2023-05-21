@@ -5,7 +5,7 @@ use std::{
 };
 
 use tokio::sync::mpsc;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::frame::ServerFrames;
 
@@ -17,9 +17,12 @@ pub(crate) struct CameraId(pub(crate) SocketAddr);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub(crate) struct Plate {
-	pub(crate) plate: String,
+	pub(crate) plate: PlateName,
 	pub(crate) timestamp: Timestamp,
 }
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+pub(crate) struct PlateName(pub(crate) String);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub(crate) struct Camera {
@@ -78,7 +81,7 @@ pub(crate) struct Db {
 struct State {
 	cameras: HashMap<CameraId, Camera>,
 	dispatchers: HashMap<Road, Vec<(DispatcherId, mpsc::Sender<ServerFrames>)>>,
-	plates: HashMap<(Plate, Road), Vec<(Mile, Timestamp)>>,
+	plates: HashMap<(PlateName, Road), Vec<(Mile, Timestamp)>>,
 	ticketed_plates_by_day: HashSet<(Timestamp, String)>,
 	open_tickets: HashMap<Road, Vec<Ticket>>,
 }
@@ -166,42 +169,42 @@ impl Db {
 		road: Road,
 	) -> Option<Vec<(Mile, Timestamp)>> {
 		let state = self.state.lock().unwrap();
-		state.plates.get(&(plate, road)).cloned()
+		debug!(?state);
+		state.plates.get(&(plate.plate, road)).cloned()
 	}
 
 	pub(crate) fn add_plate(&self, camera_id: CameraId, plate: Plate) {
+		//TODO: Check if the same plate was already added for the road AND MILE
 		info!("Add car: {plate:?}");
 		let camera = self.get_camera(camera_id).unwrap();
+		let mut state = self.state.lock().unwrap();
 
-		match self
-			.state
-			.lock()
-			.unwrap()
+		match state
 			.plates
-			.get_mut(&(plate.clone(), camera.road.clone()))
+			.get_mut(&(plate.plate.clone(), camera.road.clone()))
 		{
 			Some(v) => v.push((camera.mile, plate.timestamp)),
 			None => {
-				self.state.lock().unwrap().plates.insert(
-					(plate.clone(), camera.road),
+				state.plates.insert(
+					(plate.clone().plate, camera.road),
 					vec![(camera.mile, plate.timestamp)],
 				);
 			}
 		}
 	}
 
-	pub(crate) fn ticket_plate(&self, day: u32, plate_name: String) {
-		info!("Add ticket for day: {day}:{plate_name}");
+	pub(crate) fn ticket_plate(&self, day: u32, plate_name: PlateName) {
+		info!("Add ticket for day: {day}:{}", plate_name.0);
 		let mut state = self.state.lock().unwrap();
 		state
 			.ticketed_plates_by_day
-			.insert((Timestamp(day), plate_name));
+			.insert((Timestamp(day), plate_name.0));
 	}
 
-	pub(crate) fn is_plate_ticketed_for_day(&self, day: u32, plate_name: String) -> bool {
+	pub(crate) fn is_plate_ticketed_for_day(&self, day: u32, plate_name: PlateName) -> bool {
 		let state = self.state.lock().unwrap();
 		state
 			.ticketed_plates_by_day
-			.contains(&(Timestamp(day), plate_name))
+			.contains(&(Timestamp(day), plate_name.0))
 	}
 }

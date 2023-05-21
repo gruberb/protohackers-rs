@@ -9,7 +9,10 @@ use tracing::{debug, error, info};
 
 use crate::{
 	connection::ConnectionType,
-	db::{Camera, CameraId, Db, DbHolder, DispatcherId, Limit, Mile, Plate, Road, Timestamp},
+	db::{
+		Camera, CameraId, Db, DbHolder, DispatcherId, Limit, Mile, Plate, PlateName, Road,
+		Timestamp,
+	},
 	frame::{ClientFrames, ServerFrames},
 	heartbeat::Heartbeat,
 	ticketing::{issue_possible_ticket, send_out_waiting_tickets},
@@ -42,7 +45,7 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) -> crate::Result<
 		listener,
 		db_holder: DbHolder::new(),
 		limit_connections: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
-		notify_shutdown,
+		notify_shutdown: notify_shutdown.clone(),
 		shutdown_complete_tx,
 	};
 
@@ -137,9 +140,11 @@ impl Handler {
 				res = self.connection.read_frame() => {
 					info!("Reading from frame: {res:?}");
 					match res? {
-						Some(frame) => {
+					   Some(frame) => {
 							info!("Received frame");
-						   let _ = self.handle_client_frame(self.db.clone(), frame, send_message.clone()).await;
+							if let Err(e) = self.handle_client_frame(self.db.clone(), frame, send_message.clone()).await {
+								error!("Error handling frame: {e:?}");
+							  }
 						},
 						None => return Ok(()),
 					}
@@ -184,18 +189,10 @@ impl Handler {
 		match frame {
 			ClientFrames::Plate { plate, timestamp } => {
 				info!("Receive new plate {plate} {timestamp}");
-				db.add_plate(
-					CameraId(self.connection.get_address()),
-					Plate {
-						plate: plate.clone(),
-						timestamp: Timestamp(timestamp),
-					},
-				);
-
 				issue_possible_ticket(
 					&mut db,
 					Plate {
-						plate,
+						plate: PlateName(plate.clone()),
 						timestamp: Timestamp(timestamp),
 					},
 					CameraId(self.connection.get_address()),

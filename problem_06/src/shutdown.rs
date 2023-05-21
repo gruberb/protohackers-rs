@@ -1,4 +1,5 @@
 use tokio::sync::broadcast;
+use tracing::debug;
 
 #[derive(Debug)]
 pub(crate) struct Shutdown {
@@ -22,7 +23,7 @@ impl Shutdown {
 		if self.shutdown {
 			return;
 		}
-
+		debug!("waiting for shutdown");
 		let _ = self.notify.recv().await;
 
 		self.shutdown = true;
