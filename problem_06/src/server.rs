@@ -12,7 +12,7 @@ use crate::{
 	db::{Camera, CameraId, Db, DbHolder, DispatcherId, Limit, Mile, Plate, Road, Timestamp},
 	frame::{ClientFrames, ServerFrames},
 	heartbeat::Heartbeat,
-	ticketing::issue_possible_ticket,
+	ticketing::{issue_possible_ticket, send_out_waiting_tickets},
 	Connection, Shutdown,
 };
 
@@ -240,6 +240,7 @@ impl Handler {
 					roads.to_vec(),
 					send_message.clone(),
 				);
+				send_out_waiting_tickets(db).await;
 			}
 		}
 

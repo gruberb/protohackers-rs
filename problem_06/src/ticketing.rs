@@ -1,4 +1,4 @@
-use crate::db::{CameraId, Db, Plate, Ticket};
+use crate::db::{CameraId, Db, Plate, Road, Ticket};
 
 pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: CameraId) {
 	let camera = db.get_camera(camera_id).unwrap();
@@ -57,6 +57,16 @@ pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: 
 				let _ = dispatcher.unwrap().send(ticket.clone().into()).await;
 				db.ticket_plate(day, plate_name.clone());
 			}
+		}
+	}
+}
+
+pub(crate) async fn send_out_waiting_tickets(db: Db) {
+	let tickets = db.get_open_tickets();
+
+	for ticket in tickets {
+		if let Some(dispatcher) = db.get_dispatcher_for_road(Road(ticket.road)) {
+			let _ = dispatcher.send(ticket.into()).await;
 		}
 	}
 }

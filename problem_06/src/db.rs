@@ -155,6 +155,11 @@ impl Db {
 			.push(ticket);
 	}
 
+	pub(crate) fn get_open_tickets(&self) -> Vec<Ticket> {
+		let state = self.state.lock().unwrap();
+		state.open_tickets.values().flatten().cloned().collect()
+	}
+
 	pub(crate) fn get_plates_by_road(
 		&self,
 		plate: Plate,
