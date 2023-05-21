@@ -179,6 +179,7 @@ impl Handler {
 		frame: ClientFrames,
 		send_message: mpsc::Sender<ServerFrames>,
 	) -> crate::Result<()> {
+		debug!(?frame);
 		match frame {
 			ClientFrames::Plate { plate, timestamp } => {
 				info!("Receive new plate {plate} {timestamp}");
@@ -201,10 +202,12 @@ impl Handler {
 				.await;
 			}
 			ClientFrames::WantHeartbeat { interval } => {
-				tokio::spawn(async move {
-					let mut heartbeat = Heartbeat::new(interval, send_message.clone());
-					heartbeat.start().await;
-				});
+				if interval > 0 {
+					tokio::spawn(async move {
+						let mut heartbeat = Heartbeat::new(interval, send_message.clone());
+						heartbeat.start().await;
+					});
+				}
 			}
 			ClientFrames::IAmCamera { road, mile, limit } => {
 				if self.connection_type.is_some() {
