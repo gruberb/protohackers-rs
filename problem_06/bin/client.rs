@@ -75,6 +75,7 @@ async fn test_all_different_messages(
 	Ok(())
 }
 
+#[allow(dead_code)]
 async fn test_camera_connection(
 	write: &mut WriteHalf<'_>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -99,6 +100,7 @@ async fn test_camera_connection(
 	Ok(())
 }
 
+#[allow(dead_code)]
 async fn test_dipatcher_connection(
 	write: &mut WriteHalf<'_>,
 ) -> Result<(), Box<dyn std::error::Error>> {

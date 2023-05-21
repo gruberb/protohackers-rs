@@ -11,6 +11,7 @@ use crate::{
 	connection::ConnectionType,
 	db::{Camera, CameraId, Db, DbHolder, DispatcherId, Limit, Mile, Plate, Road, Timestamp},
 	frame::{ClientFrames, ServerFrames},
+	heartbeat::Heartbeat,
 	ticketing::issue_possible_ticket,
 	Connection, Shutdown,
 };
@@ -200,7 +201,10 @@ impl Handler {
 				.await;
 			}
 			ClientFrames::WantHeartbeat { interval } => {
-				info!("Want heartbeat: {interval}");
+				tokio::spawn(async move {
+					let mut heartbeat = Heartbeat::new(interval, send_message.clone());
+					heartbeat.start().await;
+				});
 			}
 			ClientFrames::IAmCamera { road, mile, limit } => {
 				if self.connection_type.is_some() {

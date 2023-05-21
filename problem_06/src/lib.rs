@@ -1,16 +1,13 @@
 mod connection;
-pub use connection::Connection;
-
-pub mod frame;
-pub use frame::ClientFrames;
-
-pub mod db;
-
+mod db;
+mod frame;
+mod heartbeat;
 pub mod server;
-
-pub mod ticketing;
-
 mod shutdown;
+mod ticketing;
+
+pub use connection::Connection;
+pub use frame::ClientFrames;
 use shutdown::Shutdown;
 
 pub const DEFAULT_IP: &'static str = "0.0.0.0";

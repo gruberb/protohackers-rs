@@ -200,6 +200,5 @@ impl Db {
 		state
 			.ticketed_plates_by_day
 			.contains(&(Timestamp(day), plate_name))
-		// debug!(?state);
 	}
 }
