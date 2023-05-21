@@ -203,6 +203,7 @@ impl Handler {
 				.await;
 			}
 			ClientFrames::WantHeartbeat { interval } => {
+				info!("Receive hearbet request with interval {interval}");
 				if interval > 0 {
 					tokio::spawn(async move {
 						let mut heartbeat = Heartbeat::new(interval, send_message.clone());
@@ -211,6 +212,7 @@ impl Handler {
 				}
 			}
 			ClientFrames::IAmCamera { road, mile, limit } => {
+				info!("Receive new camera {road} {mile} {limit}");
 				if self.connection_type.is_some() {
 					return Err("Already connected".into());
 				}
@@ -227,6 +229,7 @@ impl Handler {
 				);
 			}
 			ClientFrames::IAmDispatcher { roads } => {
+				info!("Receive new dispatcher {roads:?}");
 				if self.connection_type.is_some() {
 					return Err("Already connected".into());
 				}
