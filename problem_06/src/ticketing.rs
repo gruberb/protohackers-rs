@@ -1,6 +1,6 @@
 use crate::db::{CameraId, Db, Plate, Ticket};
 
-pub(crate) fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: CameraId) {
+pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: CameraId) {
 	let camera = db.get_camera(camera_id).unwrap();
 	let observed_plates = db
 		.get_plates_by_road(plate.clone(), camera.road.clone())
@@ -50,11 +50,11 @@ pub(crate) fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: Camera
 				let dispatcher = db.get_dispatcher_for_road(road.clone());
 
 				if dispatcher.is_none() {
-					db.add_open_ticket(ticket);
+					db.add_open_ticket(ticket.clone());
 					continue;
 				}
 
-				dispatcher.unwrap().send(ticket).await;
+				let _ = dispatcher.unwrap().send(ticket.clone().into()).await;
 				db.ticket_plate(day, plate_name.clone());
 			}
 		}

@@ -98,3 +98,20 @@ async fn test_camera_connection(
 
 	Ok(())
 }
+
+async fn test_dipatcher_connection(
+	write: &mut WriteHalf<'_>,
+) -> Result<(), Box<dyn std::error::Error>> {
+	// 81              IAmDispatcher{
+	// 03                  roads: [
+	// 00 42                   66,
+	// 01 70                   368,
+	// 13 88                   5000
+	//                     ]
+	//                 }
+	let i_am_dispatcher = [0x81, 0x03, 0x00, 0x42, 0x01, 0x70, 0x13, 0x88];
+
+	write.write_all(&i_am_dispatcher).await?;
+
+	Ok(())
+}

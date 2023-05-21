@@ -181,7 +181,7 @@ impl Handler {
 		match frame {
 			ClientFrames::Plate { plate, timestamp } => {
 				info!("Receive new plate {plate} {timestamp}");
-				db.insert_plate(
+				db.add_plate(
 					CameraId(self.connection.get_address()),
 					Plate {
 						plate: plate.clone(),
@@ -196,7 +196,8 @@ impl Handler {
 						timestamp: Timestamp(timestamp),
 					},
 					CameraId(self.connection.get_address()),
-				);
+				)
+				.await;
 			}
 			ClientFrames::WantHeartbeat { interval } => {
 				info!("Want heartbeat: {interval}");

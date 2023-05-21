@@ -7,6 +7,8 @@ use std::{
 use tokio::sync::mpsc;
 use tracing::debug;
 
+use crate::frame::ServerFrames;
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub(crate) struct DispatcherId(pub(crate) SocketAddr);
 
@@ -37,6 +39,20 @@ pub(crate) struct Ticket {
 	pub(crate) speed: u16,
 }
 
+impl From<Ticket> for ServerFrames {
+	fn from(ticket: Ticket) -> Self {
+		ServerFrames::Ticket {
+			plate: ticket.plate,
+			road: ticket.road,
+			mile1: ticket.mile1,
+			timestamp1: ticket.timestamp1,
+			mile2: ticket.mile2,
+			timestamp2: ticket.timestamp2,
+			speed: ticket.speed,
+		}
+	}
+}
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub(crate) struct Road(pub(crate) u16);
 
@@ -61,7 +77,7 @@ pub(crate) struct Db {
 #[derive(Debug)]
 struct State {
 	cameras: HashMap<CameraId, Camera>,
-	dispatchers: HashMap<Road, Vec<(DispatcherId, mpsc::Sender<Ticket>)>>,
+	dispatchers: HashMap<Road, Vec<(DispatcherId, mpsc::Sender<ServerFrames>)>>,
 	plates: HashMap<(Plate, Road), Vec<(Mile, Timestamp)>>,
 	ticketed_plates_by_day: HashSet<(Timestamp, String)>,
 	open_tickets: HashMap<Road, Vec<Ticket>>,
@@ -105,7 +121,7 @@ impl Db {
 		&self,
 		dispatcher_id: DispatcherId,
 		roads: Vec<u16>,
-		writer_stream: mpsc::Sender<Ticket>,
+		writer_stream: mpsc::Sender<ServerFrames>,
 	) {
 		let mut state = self.state.lock().unwrap();
 
@@ -120,7 +136,7 @@ impl Db {
 		debug!(?state);
 	}
 
-	pub(crate) fn get_dispatcher_for_road(&self, road: Road) -> Option<mpsc::Sender<Ticket>> {
+	pub(crate) fn get_dispatcher_for_road(&self, road: Road) -> Option<mpsc::Sender<ServerFrames>> {
 		let state = self.state.lock().unwrap();
 		let senders = state.dispatchers.get(&road);
 		if senders.is_none() {
