@@ -1,5 +1,7 @@
 use crate::db::{CameraId, Db, Plate, Road, Ticket};
 
+use tracing::debug;
+
 pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: CameraId) {
 	let camera = db.get_camera(camera_id).unwrap();
 	let observed_plates = db
@@ -44,16 +46,19 @@ pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: 
 
 			for day in day_start..=day_end {
 				if db.is_plate_ticketed_for_day(day, plate_name.clone()) {
+					debug!(?ticket, "Ticket already issued");
 					continue;
 				}
 
 				let dispatcher = db.get_dispatcher_for_road(road.clone());
 
 				if dispatcher.is_none() {
+					debug!(?ticket, "No dispatcher for road");
 					db.add_open_ticket(ticket.clone());
 					continue;
 				}
 
+				debug!(?ticket, "Sending ticket");
 				let _ = dispatcher.unwrap().send(ticket.clone().into()).await;
 				db.ticket_plate(day, plate_name.clone());
 			}
@@ -63,7 +68,7 @@ pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: 
 
 pub(crate) async fn send_out_waiting_tickets(db: Db) {
 	let tickets = db.get_open_tickets();
-
+	debug!(?tickets, "Sending out waiting tickets");
 	for ticket in tickets {
 		if let Some(dispatcher) = db.get_dispatcher_for_road(Road(ticket.road)) {
 			let _ = dispatcher.send(ticket.into()).await;
