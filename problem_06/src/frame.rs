@@ -222,8 +222,11 @@ fn get_u16_vec<'a>(src: &mut Cursor<&'a [u8]>, len: usize) -> Result<Vec<u16>, E
 }
 
 fn skip(src: &mut Cursor<&[u8]>, n: usize) -> Result<(), Error> {
+	info!(
+		"Bytes left: src: {src:?}: n: {n}, remaining: {}",
+		src.remaining()
+	);
 	if src.remaining() < n {
-		info!("Not enough bytes left: {src:?}: {n}");
 		return Err(Error::Incomplete);
 	}
 
