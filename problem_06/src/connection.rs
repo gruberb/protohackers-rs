@@ -6,6 +6,8 @@ use tokio::{
 	net::TcpStream,
 };
 
+use tracing::info;
+
 use crate::frame::{self, ClientFrames, ServerFrames};
 
 pub(crate) enum ConnectionType {
@@ -34,8 +36,11 @@ impl Connection {
 	}
 
 	pub async fn read_frame(&mut self) -> crate::Result<Option<ClientFrames>> {
+		info!("Start read_frame");
 		loop {
+			info!("Looping to self.parse_frame");
 			if let Some(frame) = self.parse_frame()? {
+				info!("parse_frame got a result: {frame:?}");
 				return Ok(Some(frame));
 			}
 

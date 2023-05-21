@@ -135,6 +135,7 @@ impl Handler {
 		while !self.shutdown.is_shutdown() {
 			tokio::select! {
 				res = self.connection.read_frame() => {
+					info!("Reading from frame: {res:?}");
 					match res? {
 						Some(frame) => {
 							info!("Received frame");
@@ -142,17 +143,16 @@ impl Handler {
 						},
 						None => return Ok(()),
 					}
-
 				}
-				// message = receive_message.recv() => {
-				// 	info!("Received a message through the channel");
-				// 	match message {
-				// 		Some(message) => {
-				// 			let _ = self.connection.write_frame(message).await;
-				// 		},
-				// 		None => (),
-				// 	}
-				// }
+				message = receive_message.recv() => {
+					info!("Reading from channel: {message:?}");
+					match message {
+						Some(message) => {
+							let _ = self.connection.write_frame(message).await;
+						},
+						None => (),
+					}
+				}
 				_ = self.shutdown.recv() => {
 					debug!("Shutdown");
 					return Ok(());
