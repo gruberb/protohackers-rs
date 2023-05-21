@@ -3,11 +3,13 @@ use crate::db::{CameraId, Db, Plate, Road, Ticket};
 use tracing::debug;
 
 pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: CameraId) {
+	debug!("Issue possible ticket");
 	let camera = db.get_camera(camera_id).unwrap();
 	let observed_plates = db
 		.get_plates_by_road(plate.clone(), camera.road.clone())
 		.unwrap();
 
+	debug!(?observed_plates, "Observed plates");
 	let mile = camera.mile;
 	let limit = camera.limit;
 	let road = camera.road;
@@ -15,6 +17,14 @@ pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: 
 	let plate_name = plate.plate;
 	let timestamp = plate.timestamp;
 
+	debug!(
+		?plate_name,
+		?timestamp,
+		?mile,
+		?limit,
+		?road,
+		"Checking plate"
+	);
 	for (m, t) in observed_plates.iter() {
 		let distance = if mile > *m {
 			mile.0 - m.0
@@ -30,6 +40,7 @@ pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: 
 
 		let speed = distance * 3600 * 100 / time as u16;
 
+		debug!(?distance, ?time, ?speed, "Checking speed");
 		if speed > limit.0 * 100 {
 			let ticket = Ticket {
 				plate: plate_name.clone(),
