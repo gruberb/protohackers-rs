@@ -145,6 +145,7 @@ impl Handler {
 
 				}
 				message = receive_message.recv() => {
+					debug!(?message);
 					match message {
 						Some(message) => {
 							let _ = self.connection.write_frame(message).await;

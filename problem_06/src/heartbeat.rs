@@ -1,8 +1,7 @@
-use std::time::Duration;
-
-use tokio::sync::mpsc;
-
 use crate::frame::ServerFrames;
+use std::time::Duration;
+use tokio::sync::mpsc;
+use tracing::debug;
 
 pub(crate) struct Heartbeat {
 	is_running: bool,
@@ -34,6 +33,7 @@ impl Heartbeat {
 		interval.tick().await;
 
 		loop {
+			debug!("Heartbeat");
 			interval.tick().await;
 			let _ = self.message.send(ServerFrames::Heartbeat);
 		}
