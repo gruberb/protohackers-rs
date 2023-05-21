@@ -1,7 +1,7 @@
 use std::{fmt, io::Cursor, num::TryFromIntError, string::FromUtf8Error};
 
 use bytes::{Buf, BufMut, BytesMut};
-use tracing::{debug, error, info};
+use tracing::info;
 
 #[derive(Clone, Debug)]
 pub enum ClientFrames {
@@ -215,7 +215,6 @@ fn get_u16_vec<'a>(src: &mut Cursor<&'a [u8]>, len: usize) -> Result<Vec<u16>, E
 
 	for _ in 0..len {
 		let road = src.get_u16();
-		debug!(?road);
 		roads.push(road);
 	}
 
@@ -223,8 +222,8 @@ fn get_u16_vec<'a>(src: &mut Cursor<&'a [u8]>, len: usize) -> Result<Vec<u16>, E
 }
 
 fn skip(src: &mut Cursor<&[u8]>, n: usize) -> Result<(), Error> {
-	info!("Check if message is long enouhg: {src:?}, {n:?}");
 	if src.remaining() < n {
+		info!("Not enough bytes left: {src:?}: {n}");
 		return Err(Error::Incomplete);
 	}
 
@@ -234,7 +233,6 @@ fn skip(src: &mut Cursor<&[u8]>, n: usize) -> Result<(), Error> {
 
 fn get_u8(src: &mut Cursor<&[u8]>) -> Result<u8, Error> {
 	if !src.has_remaining() {
-		error!("Incomplete frame");
 		return Err(Error::Incomplete);
 	}
 
@@ -243,7 +241,6 @@ fn get_u8(src: &mut Cursor<&[u8]>) -> Result<u8, Error> {
 
 fn get_u16(src: &mut Cursor<&[u8]>) -> Result<u16, Error> {
 	if !src.has_remaining() {
-		error!("Incomplete frame");
 		return Err(Error::Incomplete);
 	}
 
@@ -252,7 +249,6 @@ fn get_u16(src: &mut Cursor<&[u8]>) -> Result<u16, Error> {
 
 fn get_u32(src: &mut Cursor<&[u8]>) -> Result<u32, Error> {
 	if !src.has_remaining() {
-		error!("Incomplete frame");
 		return Err(Error::Incomplete);
 	}
 
@@ -262,7 +258,6 @@ fn get_u32(src: &mut Cursor<&[u8]>) -> Result<u32, Error> {
 // Same as get_u8, but the current cursor points to the byte of the length of a message string.
 fn get_length(src: &mut Cursor<&[u8]>) -> Result<usize, Error> {
 	if !src.has_remaining() {
-		error!("Incomplete frame");
 		return Err(Error::Incomplete);
 	}
 
