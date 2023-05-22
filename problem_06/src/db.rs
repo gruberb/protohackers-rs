@@ -167,6 +167,9 @@ impl Db {
 		let mut state = self.state.lock().unwrap();
 		if let Some(tickets) = state.open_tickets.get_mut(&road) {
 			tickets.retain(|t| t.plate != ticket.plate);
+			if tickets.is_empty() {
+				state.open_tickets.remove(&road);
+			}
 			return true;
 		}
 		false
