@@ -1,8 +1,12 @@
+use std::sync::Arc;
+
+use tokio::sync::Mutex;
 use tracing::info;
 
 use crate::db::{CameraId, Db, Plate, Road, Ticket};
 
-pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: CameraId) {
+pub(crate) async fn issue_possible_ticket(db: Arc<Mutex<Db>>, plate: Plate, camera_id: CameraId) {
+	let mut db = db.lock().await;
 	let camera = db.get_camera(camera_id.clone()).unwrap();
 	let observed_plates = db.get_plates_by_road(plate.clone(), camera.road.clone());
 
@@ -72,7 +76,8 @@ pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: 
 	db.add_plate(camera_id, plate);
 }
 
-pub(crate) async fn send_out_waiting_tickets(db: Db) {
+pub(crate) async fn send_out_waiting_tickets(db: Arc<Mutex<Db>>) {
+	let mut db = db.lock().await;
 	let tickets = db.get_open_tickets();
 	info!("Sending out waiting tickets: {tickets:?}");
 	for ticket in tickets {

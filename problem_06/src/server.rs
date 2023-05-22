@@ -2,17 +2,14 @@ use std::{future::Future, sync::Arc};
 
 use tokio::{
 	net::{TcpListener, TcpStream},
-	sync::{broadcast, mpsc, Semaphore},
+	sync::{broadcast, mpsc, Mutex, Semaphore},
 	time::{self, Duration},
 };
 use tracing::{error, info};
 
 use crate::{
 	connection::ConnectionType,
-	db::{
-		Camera, CameraId, Db, DbHolder, DispatcherId, Limit, Mile, Plate, PlateName, Road,
-		Timestamp,
-	},
+	db::{Camera, CameraId, Db, DispatcherId, Limit, Mile, Plate, PlateName, Road, Timestamp},
 	frame::{ClientFrames, ServerFrames},
 	heartbeat::Heartbeat,
 	ticketing::{issue_possible_ticket, send_out_waiting_tickets},
@@ -21,7 +18,7 @@ use crate::{
 
 struct Listener {
 	listener: TcpListener,
-	db_holder: DbHolder,
+	db: Arc<Mutex<Db>>,
 	limit_connections: Arc<Semaphore>,
 	notify_shutdown: broadcast::Sender<()>,
 	shutdown_complete_tx: mpsc::Sender<()>,
@@ -30,7 +27,7 @@ struct Listener {
 struct Handler {
 	connection: Connection,
 	connection_type: Option<ConnectionType>,
-	db: Db,
+	db: Arc<Mutex<Db>>,
 	shutdown: Shutdown,
 	_shutdown_complete: mpsc::Sender<()>,
 }
@@ -43,7 +40,7 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) -> crate::Result<
 
 	let mut server = Listener {
 		listener,
-		db_holder: DbHolder::new(),
+		db: Arc::new(Mutex::new(Db::new())),
 		limit_connections: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
 		notify_shutdown: notify_shutdown.clone(),
 		shutdown_complete_tx,
@@ -90,7 +87,7 @@ impl Listener {
 			let mut handler = Handler {
 				connection: Connection::new(address, socket),
 				connection_type: None,
-				db: self.db_holder.db(),
+				db: self.db.clone(),
 				shutdown: Shutdown::new(self.notify_shutdown.subscribe()),
 				_shutdown_complete: self.shutdown_complete_tx.clone(),
 			};
@@ -173,7 +170,7 @@ impl Handler {
 
 	async fn handle_client_frame(
 		&mut self,
-		mut db: Db,
+		db: Arc<Mutex<Db>>,
 		frame: ClientFrames,
 		send_message: mpsc::Sender<ServerFrames>,
 	) -> crate::Result<()> {
@@ -181,7 +178,7 @@ impl Handler {
 			ClientFrames::Plate { plate, timestamp } => {
 				info!("Receive new plate: {plate} at {timestamp}");
 				issue_possible_ticket(
-					&mut db,
+					db,
 					Plate {
 						plate: PlateName(plate.clone()),
 						timestamp: Timestamp(timestamp),
@@ -205,7 +202,7 @@ impl Handler {
 				}
 				self.set_connection_type(ConnectionType::Camera);
 
-				db.add_camera(
+				db.lock().await.add_camera(
 					CameraId(self.connection.get_address()),
 					Camera {
 						road: Road(road),
@@ -220,7 +217,7 @@ impl Handler {
 				}
 
 				self.set_connection_type(ConnectionType::Dispatcher);
-				db.add_dispatcher(
+				db.lock().await.add_dispatcher(
 					DispatcherId(self.connection.get_address()),
 					roads.to_vec(),
 					send_message.clone(),
