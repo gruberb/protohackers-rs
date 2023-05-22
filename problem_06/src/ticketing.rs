@@ -54,6 +54,7 @@ pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: 
 					continue;
 				}
 
+				db.ticket_plate(day, plate_name.clone());
 				let dispatcher = db.get_dispatcher_for_road(road.clone());
 
 				if dispatcher.is_none() {
@@ -64,7 +65,6 @@ pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: 
 
 				info!("Sending ticket: {ticket:?}");
 				let _ = dispatcher.unwrap().send(ticket.clone().into()).await;
-				db.ticket_plate(day, plate_name.clone());
 			}
 		}
 	}
