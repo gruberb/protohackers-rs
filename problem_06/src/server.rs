@@ -131,13 +131,17 @@ impl Handler {
 		while !self.shutdown.is_shutdown() {
 			tokio::select! {
 				res = self.connection.read_frame() => {
-					match res? {
-					   Some(frame) => {
+					match res {
+					   Ok(Some(frame)) => {
 							if let Err(e) = self.handle_client_frame(self.db.clone(), frame, send_message.clone()).await {
 								error!("Error handling frame: {e:?}");
 							  }
 						},
-						None => return Ok(()),
+						Ok(None) => return Ok(()),
+						Err(_) => {
+							let _ = self.connection.write_frame(ServerFrames::Error { msg: "Not supported frame sent".to_string() }).await;
+							return Ok(());
+						}
 					}
 				}
 				message = receive_message.recv() => {
@@ -198,7 +202,11 @@ impl Handler {
 			ClientFrames::IAmCamera { road, mile, limit } => {
 				info!("Receive new camera: {road} at {mile} with limit {limit}");
 				if self.connection_type.is_some() {
-                    let _ = send_message.send(ServerFrames::Error { msg: "Already connected as camera".to_string() }).await;
+					let _ = send_message
+						.send(ServerFrames::Error {
+							msg: "Already connected as camera".to_string(),
+						})
+						.await;
 					return Err("Already connected".into());
 				}
 				self.set_connection_type(ConnectionType::Camera);
@@ -214,7 +222,11 @@ impl Handler {
 			}
 			ClientFrames::IAmDispatcher { roads } => {
 				if self.connection_type.is_some() {
-                    let _ = send_message.send(ServerFrames::Error { msg: "Already connected as dispatcher".to_string() }).await;
+					let _ = send_message
+						.send(ServerFrames::Error {
+							msg: "Already connected as dispatcher".to_string(),
+						})
+						.await;
 					return Err("Already connected".into());
 				}
 
