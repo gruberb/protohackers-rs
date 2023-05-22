@@ -5,7 +5,7 @@ use tokio::{
 	sync::{broadcast, mpsc, Semaphore},
 	time::{self, Duration},
 };
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{
 	connection::ConnectionType,
@@ -179,6 +179,7 @@ impl Handler {
 	) -> crate::Result<()> {
 		match frame {
 			ClientFrames::Plate { plate, timestamp } => {
+				info!("Receive new plate: {plate} at {timestamp}");
 				issue_possible_ticket(
 					&mut db,
 					Plate {
@@ -198,6 +199,7 @@ impl Handler {
 				}
 			}
 			ClientFrames::IAmCamera { road, mile, limit } => {
+				info!("Receive new camera: {road} at {mile} with limit {limit}");
 				if self.connection_type.is_some() {
 					return Err("Already connected".into());
 				}
