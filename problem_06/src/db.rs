@@ -125,7 +125,7 @@ impl Db {
 		roads: Vec<u16>,
 		writer_stream: mpsc::Sender<ServerFrames>,
 	) {
-		info!("Adding new dispatcher for raods: {roads:?}");
+		info!("Adding new dispatcher for roads: {roads:?}");
 		let mut state = self.state.lock().unwrap();
 
 		for r in roads.iter() {
@@ -149,6 +149,7 @@ impl Db {
 
 	pub(crate) fn add_open_ticket(&self, ticket: Ticket) {
 		let mut state = self.state.lock().unwrap();
+		info!("Adding open ticket: {ticket:?}");
 		state
 			.open_tickets
 			.entry(Road(ticket.road))
@@ -162,6 +163,7 @@ impl Db {
 	}
 
 	pub(crate) fn remove_open_ticket(&self, road: Road, ticket: Ticket) -> bool {
+		info!("Removing open ticket: {ticket:?}");
 		let mut state = self.state.lock().unwrap();
 		if let Some(tickets) = state.open_tickets.get_mut(&road) {
 			tickets.retain(|t| t.plate != ticket.plate);
