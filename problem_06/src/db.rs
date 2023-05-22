@@ -211,7 +211,9 @@ impl Db {
 	}
 
 	pub(crate) fn is_plate_ticketed_for_day(&self, day: u32, plate_name: PlateName) -> bool {
+		info!("Is plate ticketed for day: {day} {plate_name:?}");
 		let state = self.state.lock().unwrap();
+		info!("{:?}", state.ticketed_plates_by_day);
 		state
 			.ticketed_plates_by_day
 			.contains(&(Timestamp(day), plate_name.0))
