@@ -180,16 +180,27 @@ impl Handler {
 	) -> crate::Result<()> {
 		match frame {
 			ClientFrames::Plate { plate, timestamp } => {
-				info!("Receive new plate: {plate} at {timestamp}");
-				issue_possible_ticket(
-					db,
-					Plate {
-						plate: PlateName(plate.clone()),
-						timestamp: Timestamp(timestamp),
-					},
-					CameraId(self.connection.get_address()),
-				)
-				.await;
+				if self.connection_type.is_some()
+					&& self.connection_type == Some(ConnectionType::Camera)
+				{
+					info!("Receive new plate: {plate} at {timestamp}");
+					issue_possible_ticket(
+						db,
+						Plate {
+							plate: PlateName(plate.clone()),
+							timestamp: Timestamp(timestamp),
+						},
+						CameraId(self.connection.get_address()),
+					)
+					.await;
+				} else {
+					let _ = send_message
+						.send(ServerFrames::Error {
+							msg: "Not connected as camera".to_string(),
+						})
+						.await;
+					return Err("Already connected".into());
+				}
 			}
 			ClientFrames::WantHeartbeat { interval } => {
 				if interval > 0 {
@@ -204,7 +215,7 @@ impl Handler {
 				if self.connection_type.is_some() {
 					let _ = send_message
 						.send(ServerFrames::Error {
-							msg: "Already connected as camera".to_string(),
+							msg: "Already connected as a connection type".to_string(),
 						})
 						.await;
 					return Err("Already connected".into());
@@ -224,7 +235,7 @@ impl Handler {
 				if self.connection_type.is_some() {
 					let _ = send_message
 						.send(ServerFrames::Error {
-							msg: "Already connected as dispatcher".to_string(),
+							msg: "Already connected as a connection type".to_string(),
 						})
 						.await;
 					return Err("Already connected".into());

@@ -8,6 +8,7 @@ use tokio::{
 
 use crate::frame::{self, ClientFrames, ServerFrames};
 
+#[derive(PartialEq)]
 pub(crate) enum ConnectionType {
 	Camera,
 	Dispatcher,
