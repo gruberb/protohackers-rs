@@ -51,17 +51,18 @@ pub(crate) async fn issue_possible_ticket(db: Arc<Mutex<Db>>, plate: Plate, came
 			let day_start = timestamp1 / 86400;
 			let day_end = timestamp2 / 86400;
 
-            
-            let spans_multiple_days = day_start != day_end;
-            
-            if spans_multiple_days && (db.is_plate_ticketed_for_day(day_start, plate_name.clone()) || db.is_plate_ticketed_for_day(day_end, plate_name.clone())) {
-                continue;
-            }
+			let spans_multiple_days = day_start != day_end;
 
-            
-            if db.is_plate_ticketed_for_day(day_start, plate_name.clone()) {
-                continue;
-            }
+			if spans_multiple_days
+				&& (db.is_plate_ticketed_for_day(day_start, plate_name.clone())
+					|| db.is_plate_ticketed_for_day(day_end, plate_name.clone()))
+			{
+				continue;
+			}
+
+			if db.is_plate_ticketed_for_day(day_start, plate_name.clone()) {
+				continue;
+			}
 
 			for day in day_start..=day_end {
 				info!("Ticket for day {day} for {ticket:?}");
