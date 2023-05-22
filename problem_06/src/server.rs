@@ -198,6 +198,7 @@ impl Handler {
 			ClientFrames::IAmCamera { road, mile, limit } => {
 				info!("Receive new camera: {road} at {mile} with limit {limit}");
 				if self.connection_type.is_some() {
+                    let _ = send_message.send(ServerFrames::Error { msg: "Already connected as camera".to_string() }).await;
 					return Err("Already connected".into());
 				}
 				self.set_connection_type(ConnectionType::Camera);
@@ -213,6 +214,7 @@ impl Handler {
 			}
 			ClientFrames::IAmDispatcher { roads } => {
 				if self.connection_type.is_some() {
+                    let _ = send_message.send(ServerFrames::Error { msg: "Already connected as dispatcher".to_string() }).await;
 					return Err("Already connected".into());
 				}
 

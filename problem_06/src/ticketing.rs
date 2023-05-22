@@ -51,25 +51,33 @@ pub(crate) async fn issue_possible_ticket(db: Arc<Mutex<Db>>, plate: Plate, came
 			let day_start = timestamp1 / 86400;
 			let day_end = timestamp2 / 86400;
 
+            
+            let spans_multiple_days = day_start != day_end;
+            
+            if spans_multiple_days && (db.is_plate_ticketed_for_day(day_start, plate_name.clone()) || db.is_plate_ticketed_for_day(day_end, plate_name.clone())) {
+                continue;
+            }
+
+            
+            if db.is_plate_ticketed_for_day(day_start, plate_name.clone()) {
+                continue;
+            }
+
 			for day in day_start..=day_end {
-				info!("Day {day} for {ticket:?}");
-				if db.is_plate_ticketed_for_day(day, plate_name.clone()) {
-					info!("Ticket already issued: {ticket:?}");
-					continue;
-				}
-
+				info!("Ticket for day {day} for {ticket:?}");
 				db.ticket_plate(day, plate_name.clone());
-				let dispatcher = db.get_dispatcher_for_road(road.clone());
-
-				if dispatcher.is_none() {
-					info!("No dispatcher yet for this road: {ticket:?}");
-					db.add_open_ticket(ticket.clone());
-					continue;
-				}
-
-				info!("Sending ticket: {ticket:?}");
-				let _ = dispatcher.unwrap().send(ticket.clone().into()).await;
 			}
+
+			let dispatcher = db.get_dispatcher_for_road(road.clone());
+
+			if dispatcher.is_none() {
+				info!("No dispatcher yet for this road: {ticket:?}");
+				db.add_open_ticket(ticket.clone());
+				continue;
+			}
+
+			info!("Sending ticket: {ticket:?}");
+			let _ = dispatcher.unwrap().send(ticket.clone().into()).await;
 		}
 	}
 
