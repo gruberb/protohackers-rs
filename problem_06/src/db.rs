@@ -163,6 +163,15 @@ impl Db {
 		state.open_tickets.values().flatten().cloned().collect()
 	}
 
+	pub(crate) fn remove_open_ticket(&self, road: Road, ticket: Ticket) -> bool {
+		let mut state = self.state.lock().unwrap();
+		if let Some(tickets) = state.open_tickets.get_mut(&road) {
+			tickets.retain(|t| t.plate != ticket.plate);
+			return true;
+		}
+		false
+	}
+
 	pub(crate) fn get_plates_by_road(
 		&self,
 		plate: Plate,

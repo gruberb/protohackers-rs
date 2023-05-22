@@ -88,7 +88,8 @@ pub(crate) async fn send_out_waiting_tickets(db: Db) {
 	debug!(?tickets, "Sending out waiting tickets");
 	for ticket in tickets {
 		if let Some(dispatcher) = db.get_dispatcher_for_road(Road(ticket.road)) {
-			let _ = dispatcher.send(ticket.into()).await;
+			let _ = dispatcher.send(ticket.clone().into()).await;
+			db.remove_open_ticket(Road(ticket.road), ticket);
 		}
 	}
 }
