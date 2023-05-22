@@ -5,7 +5,7 @@ use std::{
 };
 
 use tokio::sync::mpsc;
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::frame::ServerFrames;
 
@@ -115,7 +115,6 @@ impl Db {
 	}
 
 	pub(crate) fn add_camera(&self, camera_id: CameraId, camera: Camera) {
-		info!("Add new camera: {camera:?}");
 		let mut state = self.state.lock().unwrap();
 		state.cameras.insert(camera_id, camera);
 	}
@@ -126,7 +125,7 @@ impl Db {
 		roads: Vec<u16>,
 		writer_stream: mpsc::Sender<ServerFrames>,
 	) {
-		info!("Add new dispatcher: {roads:?}");
+		info!("Adding new dispatcher for raods: {roads:?}");
 		let mut state = self.state.lock().unwrap();
 
 		for r in roads.iter() {
@@ -149,7 +148,6 @@ impl Db {
 	}
 
 	pub(crate) fn add_open_ticket(&self, ticket: Ticket) {
-		info!("Add open ticket: {ticket:?}");
 		let mut state = self.state.lock().unwrap();
 		state
 			.open_tickets
@@ -181,13 +179,11 @@ impl Db {
 		road: Road,
 	) -> Option<Vec<(Mile, Timestamp)>> {
 		let state = self.state.lock().unwrap();
-		debug!(?state);
 		state.plates.get(&(plate.plate, road)).cloned()
 	}
 
 	pub(crate) fn add_plate(&self, camera_id: CameraId, plate: Plate) {
 		//TODO: Check if the same plate was already added for the road AND MILE
-		info!("Add car: {plate:?}");
 		let camera = self.get_camera(camera_id).unwrap();
 		let mut state = self.state.lock().unwrap();
 
@@ -206,7 +202,6 @@ impl Db {
 	}
 
 	pub(crate) fn ticket_plate(&self, day: u32, plate_name: PlateName) {
-		info!("Add ticket for day: {day}:{}", plate_name.0);
 		let mut state = self.state.lock().unwrap();
 		state
 			.ticketed_plates_by_day

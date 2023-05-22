@@ -5,7 +5,7 @@ use tokio::{
 	sync::{broadcast, mpsc, Semaphore},
 	time::{self, Duration},
 };
-use tracing::{debug, error, info};
+use tracing::error;
 
 use crate::{
 	connection::ConnectionType,
@@ -56,7 +56,7 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) -> crate::Result<
 			}
 		}
 		_ = shutdown => {
-			info!("shutting down");
+			// Shutdown signal received
 		}
 	}
 
@@ -76,8 +76,6 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) -> crate::Result<
 
 impl Listener {
 	async fn run(&mut self) -> crate::Result<()> {
-		info!("accepting inbound connections");
-
 		loop {
 			let permit = self
 				.limit_connections
@@ -96,8 +94,6 @@ impl Listener {
 				shutdown: Shutdown::new(self.notify_shutdown.subscribe()),
 				_shutdown_complete: self.shutdown_complete_tx.clone(),
 			};
-
-			info!("Created new handler");
 
 			tokio::spawn(async move {
 				if let Err(err) = handler.run().await {
@@ -138,10 +134,8 @@ impl Handler {
 		while !self.shutdown.is_shutdown() {
 			tokio::select! {
 				res = self.connection.read_frame() => {
-					info!("Reading from frame: {res:?}");
 					match res? {
 					   Some(frame) => {
-							info!("Received frame");
 							if let Err(e) = self.handle_client_frame(self.db.clone(), frame, send_message.clone()).await {
 								error!("Error handling frame: {e:?}");
 							  }
@@ -150,7 +144,6 @@ impl Handler {
 					}
 				}
 				message = receive_message.recv() => {
-					info!("Reading from channel: {message:?}");
 					match message {
 						Some(message) => {
 							let _ = self.connection.write_frame(message).await;
@@ -159,7 +152,6 @@ impl Handler {
 					}
 				}
 				_ = self.shutdown.recv() => {
-					debug!("Shutdown");
 					return Ok(());
 				}
 			};
@@ -185,10 +177,8 @@ impl Handler {
 		frame: ClientFrames,
 		send_message: mpsc::Sender<ServerFrames>,
 	) -> crate::Result<()> {
-		debug!(?frame);
 		match frame {
 			ClientFrames::Plate { plate, timestamp } => {
-				info!("Receive new plate {plate} {timestamp}");
 				issue_possible_ticket(
 					&mut db,
 					Plate {
@@ -200,7 +190,6 @@ impl Handler {
 				.await;
 			}
 			ClientFrames::WantHeartbeat { interval } => {
-				info!("Receive hearbet request with interval {interval}");
 				if interval > 0 {
 					tokio::spawn(async move {
 						let mut heartbeat = Heartbeat::new(interval, send_message.clone());
@@ -209,12 +198,10 @@ impl Handler {
 				}
 			}
 			ClientFrames::IAmCamera { road, mile, limit } => {
-				info!("Receive new camera {road} {mile} {limit}");
 				if self.connection_type.is_some() {
 					return Err("Already connected".into());
 				}
 				self.set_connection_type(ConnectionType::Camera);
-				info!("Set connection type to camera");
 
 				db.add_camera(
 					CameraId(self.connection.get_address()),
@@ -226,7 +213,6 @@ impl Handler {
 				);
 			}
 			ClientFrames::IAmDispatcher { roads } => {
-				info!("Receive new dispatcher {roads:?}");
 				if self.connection_type.is_some() {
 					return Err("Already connected".into());
 				}

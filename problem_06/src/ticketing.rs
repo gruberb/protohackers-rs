@@ -1,19 +1,16 @@
-use tracing::debug;
+use tracing::info;
 
 use crate::db::{CameraId, Db, Plate, Road, Ticket};
 
 pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: CameraId) {
-	debug!("Issue possible ticket");
 	let camera = db.get_camera(camera_id.clone()).unwrap();
 	let observed_plates = db.get_plates_by_road(plate.clone(), camera.road.clone());
 
 	if observed_plates.is_none() {
-		debug!("No observed plates");
 		db.add_plate(camera_id, plate);
 		return;
 	}
 
-	debug!(?observed_plates, "Observed plates");
 	let mile = camera.mile;
 	let limit = camera.limit;
 	let road = camera.road;
@@ -21,14 +18,6 @@ pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: 
 	let plate_name = plate.clone().plate;
 	let timestamp = plate.clone().timestamp;
 
-	debug!(
-		?plate_name,
-		?timestamp,
-		?mile,
-		?limit,
-		?road,
-		"Checking plate"
-	);
 	for (m, t) in observed_plates.unwrap().iter() {
 		let distance = if mile > *m {
 			mile.0 - m.0
@@ -44,7 +33,6 @@ pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: 
 
 		let speed = (distance as u64 * 3600 * 100 / time as u64) as u16;
 
-		debug!(?distance, ?time, ?speed, "Checking speed");
 		if speed > limit.0 * 100 {
 			let ticket = Ticket {
 				plate: plate_name.clone().0,
@@ -60,20 +48,21 @@ pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: 
 			let day_end = timestamp2 / 86400;
 
 			for day in day_start..=day_end {
+				info!("Day {day} for {ticket:?}");
 				if db.is_plate_ticketed_for_day(day, plate_name.clone()) {
-					debug!(?ticket, "Ticket already issued");
+					info!("Ticket already issued: {ticket:?}");
 					continue;
 				}
 
 				let dispatcher = db.get_dispatcher_for_road(road.clone());
 
 				if dispatcher.is_none() {
-					debug!(?ticket, "No dispatcher for road");
+					info!("No dispatcher yet for this road: {ticket:?}");
 					db.add_open_ticket(ticket.clone());
 					continue;
 				}
 
-				debug!(?ticket, "Sending ticket");
+				info!("Sending ticket: {ticket:?}");
 				let _ = dispatcher.unwrap().send(ticket.clone().into()).await;
 				db.ticket_plate(day, plate_name.clone());
 			}
@@ -85,7 +74,7 @@ pub(crate) async fn issue_possible_ticket(db: &mut Db, plate: Plate, camera_id: 
 
 pub(crate) async fn send_out_waiting_tickets(db: Db) {
 	let tickets = db.get_open_tickets();
-	debug!(?tickets, "Sending out waiting tickets");
+	info!("Sending out waiting tickets: {tickets:?}");
 	for ticket in tickets {
 		if let Some(dispatcher) = db.get_dispatcher_for_road(Road(ticket.road)) {
 			let _ = dispatcher.send(ticket.clone().into()).await;

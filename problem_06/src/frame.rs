@@ -1,7 +1,6 @@
 use std::{fmt, io::Cursor, num::TryFromIntError, string::FromUtf8Error};
 
 use bytes::{Buf, BufMut, BytesMut};
-use tracing::info;
 
 #[derive(Clone, Debug)]
 pub enum ClientFrames {
@@ -36,7 +35,6 @@ pub enum Error {
 
 impl ClientFrames {
 	pub fn check(src: &mut Cursor<&[u8]>) -> Result<(), Error> {
-		info!("Checking message: {src:?}");
 		match get_u8(src)? {
 			// Error: msg: str (Server -> Client)
 			// 0x10 => {
@@ -78,10 +76,8 @@ impl ClientFrames {
 			}
 			// IAmDispatcher: numroads: u8, roads: [u16]
 			0x81 => {
-				info!("Checking IAmDispatcher message: {src:?}");
 				// numroads
 				let amount = get_u8(src)? * 2;
-				info!("amount of roads: {amount:?}");
 				// roads
 				skip(src, amount as usize)?;
 				Ok(())
@@ -223,10 +219,6 @@ fn get_u16_vec<'a>(src: &mut Cursor<&'a [u8]>, len: usize) -> Result<Vec<u16>, E
 }
 
 fn skip(src: &mut Cursor<&[u8]>, n: usize) -> Result<(), Error> {
-	info!(
-		"Bytes left: src: {src:?}: n: {n}, remaining: {}",
-		src.remaining()
-	);
 	if src.remaining() < n {
 		return Err(Error::Incomplete);
 	}
